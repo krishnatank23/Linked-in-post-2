@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 import os
 from dotenv import load_dotenv
 
@@ -27,3 +28,15 @@ async def init_db():
     async with engine.begin() as conn:
         from models import Base as ModelBase  # noqa: F811
         await conn.run_sync(ModelBase.metadata.create_all)
+
+        # Lightweight SQLite migration for newly added user cache columns.
+        if DATABASE_URL.startswith("sqlite"):
+            result = await conn.execute(text("PRAGMA table_info(users)"))
+            columns = {row[1] for row in result.fetchall()}
+
+            if "parsed_profile_cache" not in columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN parsed_profile_cache JSON"))
+            if "brand_voice_cache" not in columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN brand_voice_cache JSON"))
+            if "cache_updated_at" not in columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN cache_updated_at DATETIME"))

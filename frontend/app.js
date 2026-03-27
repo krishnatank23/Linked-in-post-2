@@ -8,6 +8,8 @@ const API_BASE = window.location.origin + '/api';
 // ─── State ───
 let currentUser = null;
 let authToken = null;
+let pipelineStatusPoller = null;
+let selectedInfluencers = [];
 
 // ─── DOM References ───
 const $ = (sel) => document.querySelector(sel);
@@ -112,7 +114,14 @@ registerFormEl.addEventListener('submit', async (e) => {
             body: formData,
         });
 
-        const data = await res.json();
+        let data;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}...`);
+        }
 
         if (!res.ok) {
             throw new Error(data.detail || 'Registration failed');
@@ -151,7 +160,14 @@ loginFormEl.addEventListener('submit', async (e) => {
             }),
         });
 
-        const data = await res.json();
+        let data;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}...`);
+        }
 
         if (!res.ok) {
             throw new Error(data.detail || 'Login failed');
@@ -171,6 +187,9 @@ loginFormEl.addEventListener('submit', async (e) => {
         showToast(`Welcome back, ${currentUser.username}!`, 'success');
         showDashboard();
 
+        // Reset all previous UI state before loading this user's data.
+        clearAnalysisUI();
+
         // Load existing results if any
         loadExistingResults();
 
@@ -188,9 +207,9 @@ loginFormEl.addEventListener('submit', async (e) => {
 $('#btn-logout').addEventListener('click', () => {
     currentUser = null;
     authToken = null;
+    selectedInfluencers = [];
     sessionStorage.clear();
-    agentOutputs.innerHTML = '';
-    pipelineProgress.hidden = true;
+    clearAnalysisUI();
     showSection(authSection);
     showToast('Logged out successfully', 'info');
 });
@@ -209,7 +228,14 @@ async function runPipeline() {
     // Show progress bar
     pipelineProgress.hidden = false;
     resetProgress();
+    selectedInfluencers = [];
     agentOutputs.innerHTML = '';
+    const gapSection = $('#gap-analysis-section');
+    const gapResults = $('#gap-analysis-results');
+    if (gapSection) gapSection.hidden = true;
+    if (gapResults) gapResults.innerHTML = '';
+    ensureLiveStatusBanner();
+    startPipelineStatusPolling();
 
     // Show step 1 running
     setStepState('step-1', 'running');
@@ -224,7 +250,14 @@ async function runPipeline() {
             body: JSON.stringify({ user_id: currentUser.id }),
         });
 
-        const data = await res.json();
+        let data;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}...`);
+        }
 
         if (!res.ok) {
             throw new Error(data.detail || 'Pipeline execution failed');
@@ -238,13 +271,62 @@ async function runPipeline() {
         showToast(err.message, 'error');
         setStepState('step-1', 'error');
     } finally {
+        stopPipelineStatusPolling();
         setButtonLoading(btn, false);
         btn.disabled = false;
     }
 }
 
+function ensureLiveStatusBanner() {
+    let el = document.getElementById('pipeline-live-status');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'pipeline-live-status';
+        el.style.cssText = 'margin-top:8px;font-size:12px;color:var(--text-secondary);min-height:18px;';
+        pipelineProgress.appendChild(el);
+    }
+    el.textContent = '';
+}
+
+function startPipelineStatusPolling() {
+    stopPipelineStatusPolling();
+    pipelineStatusPoller = setInterval(async () => {
+        if (!currentUser?.id) return;
+        try {
+            const res = await fetch(`${API_BASE}/pipeline/live-status/${currentUser.id}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const el = document.getElementById('pipeline-live-status');
+            if (!el) return;
+
+            if (data?.active && data?.message) {
+                const secs = typeof data.wait_seconds === 'number' ? Math.ceil(data.wait_seconds) : null;
+                el.textContent = secs ? `⏳ ${data.message.replace(/\s*\(attempt.*\)$/,'')} (${secs}s)` : `⏳ ${data.message}`;
+            } else {
+                el.textContent = '';
+            }
+        } catch (_err) {
+            // Ignore polling failures silently.
+        }
+    }, 1200);
+}
+
+function stopPipelineStatusPolling() {
+    if (pipelineStatusPoller) {
+        clearInterval(pipelineStatusPoller);
+        pipelineStatusPoller = null;
+    }
+    const el = document.getElementById('pipeline-live-status');
+    if (el) {
+        el.textContent = '';
+    }
+}
+
 async function loadExistingResults() {
     try {
+        // Always clear UI first to avoid showing stale results across users.
+        clearAnalysisUI();
+
         const res = await fetch(`${API_BASE}/pipeline/results/${currentUser.id}`, {
             headers: { 'Authorization': `Bearer ${authToken}` },
         });
@@ -283,6 +365,135 @@ function renderResults(results) {
             agentOutputs.appendChild(card);
         }, index * 300);
     });
+
+    // Render dynamic action panel based on completed agents
+    setTimeout(() => {
+        renderDynamicActionPanel(results);
+    }, (results.length * 300) + 200);
+}
+
+// ─── Dynamic Action Panel ───
+function renderDynamicActionPanel(results) {
+    // Clear any existing action panel
+    let panel = document.getElementById('dynamic-action-panel');
+    if (panel) panel.remove();
+
+    const successfulAgents = results.filter(r => r.status === 'success');
+    if (successfulAgents.length === 0) return;
+
+    panel = document.createElement('div');
+    panel.id = 'dynamic-action-panel';
+    panel.style.cssText = `
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(99,102,241,0.08) 100%);
+        border: 1px solid rgba(6,182,212,0.3);
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    `;
+
+    const panelTitle = document.createElement('h3');
+    panelTitle.textContent = '🎯 Next Steps';
+    panelTitle.style.cssText = 'margin: 0; color: var(--text-primary); font-size: 1.1rem;';
+    panel.appendChild(panelTitle);
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+    `;
+    panel.appendChild(buttonContainer);
+
+    successfulAgents.forEach((agent, idx) => {
+        const agentName = agent.agent_name || '';
+
+        if (agentName.includes('Influence')) {
+            // Action for Influencer Scout: Select & Analyze
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary';
+            btn.style.cssText = 'background: var(--gradient-primary); padding: 12px 16px; text-align: center; cursor: pointer;';
+            btn.innerHTML = `
+                <span class="btn-text">👥 Select Influencers & Analyze</span>
+                <span class="btn-loader" hidden><span class="spinner"></span></span>
+            `;
+            btn.addEventListener('click', () => {
+                const influencerCard = document.querySelector('[data-influencer-idx]');
+                if (influencerCard) {
+                    influencerCard.closest('.agent-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    showToast('Scroll up to select influencers', 'info');
+                } else {
+                    showToast('Influencer list not found', 'error');
+                }
+            });
+            buttonContainer.appendChild(btn);
+        }
+
+        if (agentName.includes('Gap Analysis')) {
+            // Action for Gap Analysis: Generate Posts
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary';
+            btn.style.cssText = 'background: var(--gradient-primary); padding: 12px 16px; text-align: center; cursor: pointer;';
+            btn.id = 'action-generate-posts-panel';
+            btn.innerHTML = `
+                <span class="btn-text">✨ Generate LinkedIn Posts</span>
+                <span class="btn-loader" hidden><span class="spinner"></span></span>
+            `;
+            btn.addEventListener('click', () => {
+                const existingBtn = document.getElementById('btn-generate-posts');
+                if (existingBtn && !existingBtn.hidden) {
+                    existingBtn.click();
+                } else {
+                    showToast('Gap analysis output not found', 'error');
+                }
+            });
+            buttonContainer.appendChild(btn);
+        }
+
+        if (agentName.includes('Post Generator')) {
+            // Action for Post Generator: Send Reminder Email
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary';
+            btn.style.cssText = 'background: var(--gradient-primary); padding: 12px 16px; text-align: center; cursor: pointer;';
+            btn.id = 'action-send-reminder-panel';
+            btn.innerHTML = `
+                <span class="btn-text">📧 Send Reminder Email</span>
+                <span class="btn-loader" hidden><span class="spinner"></span></span>
+            `;
+            btn.addEventListener('click', () => {
+                const existingBtn = document.getElementById('btn-send-reminder');
+                if (existingBtn && !existingBtn.hidden) {
+                    existingBtn.click();
+                } else {
+                    showToast('Posts not yet generated', 'error');
+                }
+            });
+            buttonContainer.appendChild(btn);
+        }
+
+        // Generic action for any other agent
+        if (!agentName.includes('Influence') && 
+            !agentName.includes('Gap Analysis') && 
+            !agentName.includes('Post Generator') &&
+            !agentName.includes('Resume Parser') &&
+            !agentName.includes('Brand Voice')) {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary';
+            btn.style.cssText = 'background: var(--gradient-primary); padding: 12px 16px; text-align: center; cursor: pointer;';
+            btn.innerHTML = `
+                <span class="btn-text">▶ ${escapeHtml(agentName.split(/\s+/).slice(0, 2).join(' '))}</span>
+            `;
+            buttonContainer.appendChild(btn);
+        }
+    });
+
+    // Only show panel if there are action buttons
+    if (buttonContainer.children.length > 0) {
+        agentOutputs.appendChild(panel);
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function createAgentCard(result, index) {
@@ -290,7 +501,7 @@ function createAgentCard(result, index) {
     card.className = `agent-card status-${result.status}`;
     card.style.animationDelay = `${index * 0.15}s`;
 
-    const icons = ['🔍', '✨'];
+    const icons = ['🔍', '✨', '🌟'];
     const icon = icons[index] || '🤖';
 
     const badgeClass = result.status === 'success' ? 'badge-success' : 
@@ -339,8 +550,569 @@ function renderAgentOutput(result) {
         return renderBrandVoiceOutput(result.output);
     }
 
+    // Agent 3: Influence Scout
+    if (result.agent_name.includes('Influence')) {
+        return renderInfluencerOutput(result.output);
+    }
+
+    // Agent 4: Gap Analysis
+    if (result.agent_name.includes('Gap Analysis')) {
+        return renderGapAnalysisOutput(result.output);
+    }
+
+    // Agent 5: Post Generator
+    if (result.agent_name.includes('Post Generator')) {
+        return renderPostGeneratorOutput(result.output);
+    }
+
+
+    // Agent 7: Email Reminder
+    if (result.agent_name.includes('Email Reminder')) {
+        return renderEmailReminderOutput(result.status, result.output);
+    }
+
     // Fallback: render raw JSON
     return `<pre class="text-block" style="font-size: var(--fs-xs); overflow-x: auto;">${escapeHtml(JSON.stringify(result.output, null, 2))}</pre>`;
+}
+
+// ─── Influencer Scout Output ───
+function renderInfluencerOutput(output) {
+    const influencers = output.influencers || [];
+    let html = '';
+
+    if (influencers.length === 0) {
+        return `
+            <div class="output-section">
+                <div class="output-section-title">🔍 Search Query: "${escapeHtml(output.search_query_used || 'N/A')}"</div>
+                <div class="error-display" style="margin-top: 0.75rem;">
+                    ⚠️ No influencer profiles were found for this query. Try running the pipeline again or adjust your resume/profile keywords.
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+        <div class="output-section">
+            <div class="output-section-title">🔍 Search Query: "${escapeHtml(output.search_query_used)}"</div>
+            <p style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 1.5rem;">
+                We found up to 10-15 professionals who match your profile but are more established on LinkedIn. Select one or more influencers to continue. Gap analysis and all next steps run only for your selected influencers.
+            </p>
+            <div class="influencer-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                ${influencers.map((inf, idx) => `
+                    <label class="influencer-item" data-influencer-idx="${idx}" style="cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 1.25rem; border-radius: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.3s ease;">
+                        <div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem;">
+                                <span style="font-size: 11px; color: var(--text-muted);">Select</span>
+                                <input type="checkbox" class="influencer-checkbox" data-idx="${idx}" style="accent-color: #06b6d4;" />
+                            </div>
+                            <h4 style="margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; font-size: var(--fs-sm);">
+                                🌟 ${escapeHtml(inf.title)}
+                            </h4>
+                            <p style="font-size: var(--fs-xs); color: var(--text-secondary); margin: 0 0 1rem; line-height: 1.5; opacity: 0.8;">
+                                ${escapeHtml(inf.snippet)}
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: auto;">
+                            <a href="${inf.link}" target="_blank" class="btn btn-ghost" style="padding: 6px 12px; font-size: 11px;">
+                                View ↗
+                            </a>
+                        </div>
+                    </label>
+                `).join('')}
+            </div>
+            <div style="margin-top:1rem; display:flex; justify-content:center;">
+                <button id="btn-run-selected-gap" class="btn btn-primary" style="background: var(--gradient-primary);" disabled>
+                    <span class="btn-text">Analyze Gap for Selected Influencers</span>
+                    <span class="btn-loader" hidden><span class="spinner" style="width: 12px; height: 12px;"></span></span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Add selection and continue event listeners
+    setTimeout(() => {
+        const runBtn = document.getElementById('btn-run-selected-gap');
+        const syncSelectedInfluencers = () => {
+            selectedInfluencers = [];
+            document.querySelectorAll('.influencer-checkbox').forEach(box => {
+                const idx = Number(box.getAttribute('data-idx'));
+                const card = document.querySelector(`[data-influencer-idx="${idx}"]`);
+                if (box.checked) {
+                    if (influencers[idx]) {
+                        selectedInfluencers.push(influencers[idx]);
+                    }
+                    if (card) {
+                        card.style.border = '1px solid rgba(6, 182, 212, 0.65)';
+                        card.style.boxShadow = '0 0 0 1px rgba(6, 182, 212, 0.2)';
+                    }
+                } else if (card) {
+                    card.style.border = '1px solid rgba(255,255,255,0.05)';
+                    card.style.boxShadow = 'none';
+                }
+            });
+            if (runBtn) runBtn.disabled = selectedInfluencers.length === 0;
+        };
+
+        document.querySelectorAll('.influencer-checkbox').forEach(box => {
+            box.addEventListener('change', syncSelectedInfluencers);
+        });
+
+        if (runBtn) {
+            runBtn.addEventListener('click', () => {
+                if (selectedInfluencers.length === 0) {
+                    showToast('Please select at least one influencer first.', 'error');
+                    return;
+                }
+                runGapAnalysis(runBtn, selectedInfluencers);
+            });
+        }
+        // Clicking card toggles checkbox for better UX
+        document.querySelectorAll('[data-influencer-idx]').forEach(card => {
+            card.addEventListener('click', (event) => {
+                if (event.target.closest('a')) return;
+                const idx = card.getAttribute('data-influencer-idx');
+                const box = document.querySelector(`.influencer-checkbox[data-idx="${idx}"]`);
+                if (box) {
+                    box.checked = !box.checked;
+                    box.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    }, 100);
+
+    return html;
+}
+
+async function runGapAnalysis(btn, influencers) {
+    setButtonLoading(btn, true);
+    const section = $('#gap-analysis-section');
+
+    try {
+        if (!section) {
+            throw new Error('Gap analysis section is missing in the UI. Please refresh the page.');
+        }
+
+        const res = await fetch(`${API_BASE}/pipeline/gap-analysis`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id,
+                influencer_data: influencers
+            }),
+        });
+
+        let data;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}...`);
+        }
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Gap analysis failed');
+        }
+
+        // Show and render results
+        section.hidden = false;
+        renderGapAnalysisResults(data.results);
+        
+        // Scroll to the results
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('Gap Analysis & Strategy Generated!', 'success');
+
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
+function renderGapAnalysisResults(results) {
+    const container = $('#gap-analysis-results');
+    container.innerHTML = '';
+
+    results.forEach(result => {
+        if (result.agent_name.includes('Gap Analysis')) {
+            const output = result.output || {};
+            const gap = output.gap_analysis || {};
+            const strategy = output.content_strategy || {};
+            const schedule = strategy.proposed_schedule || [];
+            const actions = output.action_plan || [];
+
+            container.innerHTML += `
+                <div class="strategy-card">
+                    <div class="output-section">
+                        <div class="output-section-title">📊 ${escapeHtml(result.agent_name)}</div>
+                        <div class="gap-grid">
+                            <div class="gap-card">
+                                <h4>Profile Authority</h4>
+                                <p class="text-block" style="border: none; padding: 0;">${escapeHtml(gap.profile_completeness_gap)}</p>
+                            </div>
+                            <div class="gap-card">
+                                <h4>Content Impact</h4>
+                                <p class="text-block" style="border: none; padding: 0;">${escapeHtml(gap.content_authority_gap)}</p>
+                            </div>
+                            <div class="gap-card">
+                                <h4>Engagement Potential</h4>
+                                <p class="text-block" style="border: none; padding: 0;">${escapeHtml(gap.engagement_gap)}</p>
+                            </div>
+                        </div>
+                        <div class="gap-card" style="width: 100%;">
+                            <h4>Missing Success Elements</h4>
+                            <div class="tag-list">
+                                ${(gap.key_missing_elements || []).map(item => `<span class="tag tag-rose">${escapeHtml(item)}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="output-section">
+                        <div class="output-section-title">📝 Strategy & 7-Day Plan</div>
+                        <div class="text-block highlight" style="margin-bottom: 1.5rem;">
+                            <strong>Tone Tweak:</strong> ${escapeHtml(strategy.tone_adjustment)}
+                        </div>
+                        ${renderTagSection('Core Content Pillars', strategy.content_pillars, 'tag-purple')}
+                        
+                        <div class="schedule-list" style="margin-top: 1.5rem;">
+                            ${schedule.map(item => `
+                                <div class="schedule-item">
+                                    <div class="schedule-day">${escapeHtml(item.day)}</div>
+                                    <div class="schedule-content">
+                                        <span class="badge-post-type">${escapeHtml(item.post_type)}</span>
+                                        <h5>${escapeHtml(item.topic)}</h5>
+                                        <p><strong>Goal:</strong> ${escapeHtml(item.topic)}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="output-section">
+                        <div class="output-section-title">🚀 Immediate Action Plan</div>
+                        <div class="action-plan-list">
+                            ${actions.map((act, i) => `
+                                <div class="action-item">
+                                    <div class="step-icon" style="background: var(--accent-emerald); width: 24px; height: 24px; font-size: 10px;">${i+1}</div>
+                                    <span>${escapeHtml(act)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML += `
+                <div id="post-generation-container" style="margin-top: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; border-top: 2px solid var(--border-color); padding-top: 2rem;">
+                    <p style="color: var(--text-secondary); text-align: center; font-size: 1.1rem;">Ready to turn this strategy into action?</p>
+                    <button id="btn-generate-posts" class="btn btn-primary" style="background: var(--gradient-primary); font-size: 1rem; padding: 12px 24px;">
+                        <span class="btn-text">✨ Generate LinkedIn Posts from Strategy</span>
+                        <span class="btn-loader" hidden><span class="spinner"></span></span>
+                    </button>
+                    <div id="post-generation-results" style="width: 100%; margin-top: 1rem;"></div>
+                </div>
+            `;
+            
+            // Attach event listener for the new button
+            setTimeout(() => {
+                const btn = document.getElementById('btn-generate-posts');
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        runPostGenerationFromStrategy(btn, output);
+                    });
+                }
+            }, 100);
+        }
+    });
+
+    if (results.some(r => r.status === 'error')) {
+        const errorResult = results.find(r => r.status === 'error');
+        container.innerHTML += `
+            <div class="error-display" style="margin-top: 1rem;">
+                ⚠️ One or more agents failed: ${escapeHtml(errorResult.error)}
+            </div>
+        `;
+    }
+}
+
+async function runPostGenerationFromStrategy(btn, gapAnalysisData) {
+    setButtonLoading(btn, true);
+    const container = $('#post-generation-results');
+    container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">Generating your personalized posts... this may take a minute! 🚀</div>';
+
+    try {
+        const res = await fetch(`${API_BASE}/pipeline/generate-posts`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id,
+                gap_analysis_data: gapAnalysisData
+            }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Post generation failed');
+        }
+
+        // Hide the generate button after success
+        btn.style.display = 'none';
+        btn.previousElementSibling.style.display = 'none';
+
+        // Render generated posts first
+        container.innerHTML = '';
+        data.results.forEach(result => {
+            container.innerHTML += `<div style="margin-top: 2rem;">${renderAgentOutput(result)}</div>`;
+        });
+
+        // Add final explicit send button (manual email send only on click)
+        const postOutput = (data.results || []).find(r => r.agent_name && r.agent_name.includes('Post Generator'))?.output;
+        if (postOutput && Array.isArray(postOutput.posts) && postOutput.posts.length > 0) {
+            container.innerHTML += `
+                <div id="send-reminder-container" style="margin-top: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; border-top: 2px solid var(--border-color); padding-top: 2rem;">
+                    <p style="color: var(--text-secondary); text-align: center; font-size: 1.05rem;">Posts are ready. Send reminder email now?</p>
+                    <button id="btn-send-reminder" class="btn btn-primary" style="background: var(--gradient-primary); font-size: 1rem; padding: 12px 24px;">
+                        <span class="btn-text">📧 Send Reminder Email</span>
+                        <span class="btn-loader" hidden><span class="spinner"></span></span>
+                    </button>
+                    <div id="send-reminder-result" style="width: 100%; margin-top: 1rem;"></div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const sendBtn = document.getElementById('btn-send-reminder');
+                if (sendBtn) {
+                    sendBtn.addEventListener('click', () => runSendReminder(sendBtn, postOutput));
+                }
+            }, 50);
+        }
+        
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('Posts generated successfully. Review and send when ready.', 'success');
+
+    } catch (err) {
+        container.innerHTML = `<div class="error-display">⚠️ ${escapeHtml(err.message)}</div>`;
+        showToast(err.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
+async function runSendReminder(btn, postsOutput) {
+    setButtonLoading(btn, true);
+    const resultContainer = $('#send-reminder-result');
+    if (resultContainer) {
+        resultContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem;">Sending reminder email...</div>';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/pipeline/send-reminder`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id,
+                posts_data: postsOutput,
+            }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || 'Failed to send reminder email');
+        }
+
+        const emailResult = (data.results || [])[0];
+        if (resultContainer && emailResult) {
+            resultContainer.innerHTML = `<div style="margin-top: 1rem;">${renderAgentOutput(emailResult)}</div>`;
+        }
+        showToast('Reminder email sent successfully!', 'success');
+    } catch (err) {
+        if (resultContainer) {
+            resultContainer.innerHTML = `<div class="error-display">⚠️ ${escapeHtml(err.message)}</div>`;
+        }
+        showToast(err.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+function renderGapAnalysisOutput(output) {
+    const gap = output.gap_analysis || {};
+    const strategy = output.content_strategy || {};
+    const actions = output.action_plan || [];
+
+    return `
+        <div class="output-section">
+            <div class="output-section-title">📊 Gap Summary</div>
+            <div class="output-grid">
+                ${renderInfoItem('Profile Gap', gap.profile_completeness_gap || 'N/A')}
+                ${renderInfoItem('Authority Gap', gap.content_authority_gap || 'N/A')}
+                ${renderInfoItem('Engagement Gap', gap.engagement_gap || 'N/A')}
+            </div>
+            ${renderTagSection('Missing Elements', gap.key_missing_elements || [], 'tag-rose')}
+            ${renderTagSection('Content Pillars', strategy.content_pillars || [], 'tag-purple')}
+            <div class="text-block" style="margin-top: 0.75rem;"><strong>Tone Adjustment:</strong> ${escapeHtml(strategy.tone_adjustment || 'N/A')}</div>
+            ${actions.length ? `<div class="text-block" style="margin-top: 0.75rem;"><strong>Action Plan:</strong><br>${actions.map((a, i) => `${i + 1}. ${escapeHtml(a)}`).join('<br>')}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderPostGeneratorOutput(output) {
+    const posts = output.posts || [];
+
+    return `
+        <div class="output-section">
+            <div class="output-section-title">✍️ LinkedIn Post Plan</div>
+            <div class="output-grid">
+                ${renderInfoItem('Posting Frequency', output.posting_frequency || 'N/A')}
+                ${renderInfoItem('Strategy Summary', output.content_strategy_summary || 'N/A')}
+            </div>
+            ${renderTagSection('Recommended Post Types', output.recommended_post_types || [], 'tag-cyan')}
+            <div class="interactive-post-list">
+                ${posts.map((post, i) => `
+                    <article class="interactive-post-card">
+                        <div class="post-card-top">
+                            <span class="badge-post-type">${escapeHtml(post.type || 'N/A')}</span>
+                            <span class="post-index">Post ${i + 1}</span>
+                        </div>
+
+                        <p class="post-hook">${escapeHtml(extractPostHook(post.content || ''))}</p>
+
+                        <details class="post-details" ${i === 0 ? 'open' : ''}>
+                            <summary>Read full post</summary>
+                            <div class="post-content-readable">${renderHighlightedPostContent(post.content || '')}</div>
+                        </details>
+
+                        <div class="post-action-row">
+                            <button class="btn btn-ghost post-action-btn" onclick="copyPostFromEncoded('${encodeURIComponent(post.content || '')}')">Copy Post</button>
+                            ${post.image_search_query ? `<button class="btn btn-ghost post-action-btn" onclick="copyPostFromEncoded('${encodeURIComponent(post.image_search_query)}')">Copy Image Query</button>` : ''}
+                        </div>
+
+                        <div class="post-meta-grid">
+                            ${renderInfoItem('Goal', post.goal || 'N/A')}
+                            ${renderInfoItem('Image Prompt', post.image_prompt || 'N/A')}
+                        </div>
+
+
+                        ${post.image_search_query ? `<p class="exp-desc"><strong>Image Search Query:</strong> ${escapeHtml(post.image_search_query)}</p>` : ''}
+
+                        ${(post.reference_images && post.reference_images.length > 0) ? `
+                            <div class="post-image-section">
+                                <p class="exp-desc" style="margin-bottom: 0.5rem;"><strong>Suggested Real Images:</strong></p>
+                                <div class="image-suggestions-grid">
+                                    ${post.reference_images.map((img, idx) => `
+                                        <a href="${img.page_url || img.image_url}" target="_blank" rel="noopener noreferrer" class="image-suggestion-card">
+                                            <img src="${img.image_url}" alt="Suggested image ${idx + 1}" class="image-suggestion-preview" loading="lazy"/>
+                                            <div class="image-suggestion-caption">${escapeHtml(img.title || img.source || 'Open source')}</div>
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : '<p class="exp-desc"><strong>Suggested Real Images:</strong> No web images found for this post yet.</p>'}
+                    </article>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+
+function renderEmailReminderOutput(status, output) {
+    if (status === 'skipped') {
+        return `
+            <div class="output-section">
+                <div class="output-section-title">📧 Email Reminder</div>
+                <div style="padding: 1rem; background: rgba(100, 150, 255, 0.1); border-left: 4px solid #0077b5; border-radius: 4px;">
+                    <p style="color: var(--text-secondary); margin: 0;">
+                        ℹ️ Email reminder skipped. Complete all previous steps first to generate posts and send reminders.
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!output) {
+        return '<p style="color: var(--text-muted)">No email reminder data available.</p>';
+    }
+
+    const success = output.email_sent === true;
+    const recipient = output.recipient || 'user';
+    const message = output.message || 'Email sent successfully';
+    const postsCount = output.posts_count || 0;
+
+    return `
+        <div class="output-section">
+            <div class="output-section-title">📧 Email Reminder Sent</div>
+            <div style="padding: 1.5rem; background: ${success ? 'rgba(76, 175, 80, 0.1)' : 'rgba(100, 150, 255, 0.1)'}; border-left: 4px solid ${success ? '#4caf50' : '#0077b5'}; border-radius: 4px;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <span style="font-size: 1.5rem;">${success ? '✅' : 'ℹ️'}</span>
+                    <div>
+                        <p style="margin: 0; font-weight: 600; color: var(--text-primary);">
+                            ${success ? 'Reminder Email Sent!' : 'Email Reminder Status'}
+                        </p>
+                        <p style="margin: 0.25rem 0 0; font-size: var(--fs-xs); color: var(--text-secondary);">
+                            ${escapeHtml(message)}
+                        </p>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 1rem;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px;">
+                        <p style="margin: 0; font-size: var(--fs-xs); color: var(--text-secondary);">📧 Recipient</p>
+                        <p style="margin: 0.5rem 0 0; font-weight: 600; color: var(--text-primary); font-size: var(--fs-sm);">
+                            ${escapeHtml(recipient)}
+                        </p>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px;">
+                        <p style="margin: 0; font-size: var(--fs-xs); color: var(--text-secondary);">📝 Posts Included</p>
+                        <p style="margin: 0.5rem 0 0; font-weight: 600; color: var(--text-primary); font-size: var(--fs-sm);">
+                            ${postsCount} post${postsCount !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                </div>
+                ${success ? `
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="margin: 0; font-size: var(--fs-xs); color: var(--text-secondary); line-height: 1.6;">
+                            🎉 Your LinkedIn posts with accompanying images and funny reminders have been sent to your Outlook inbox. Check your email to see your complete content ready to post!
+                        </p>
+                    </div>
+                ` : `
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="margin: 0; font-size: var(--fs-xs); color: var(--text-secondary); line-height: 1.6;">
+                            💡 Make sure to configure your email settings in the backend .env file with your Outlook credentials to enable email reminders.
+                        </p>
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+function extractPostHook(content) {
+    const lines = String(content || '').split('\n').map(l => l.trim()).filter(Boolean);
+    return lines[0] || 'Here is your highlighted post idea.';
+}
+
+function renderHighlightedPostContent(content) {
+    const safe = escapeHtml(String(content || '')).replace(/\n/g, '<br>');
+    return safe.replace(/(^|\s)(#[A-Za-z0-9_]+)/g, '$1<span class="post-hashtag">$2</span>');
+}
+
+function copyPostFromEncoded(encodedText) {
+    try {
+        const value = decodeURIComponent(encodedText || '');
+        navigator.clipboard.writeText(value);
+        showToast('Copied to clipboard!', 'success');
+    } catch (_err) {
+        showToast('Unable to copy text', 'error');
+    }
 }
 
 // ─── Resume Parser Output ───
@@ -723,6 +1495,22 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
         authToken = savedToken;
         currentUser = JSON.parse(savedUser);
         showDashboard();
+        clearAnalysisUI();
         loadExistingResults();
     }
 })();
+
+function clearAnalysisUI() {
+    agentOutputs.innerHTML = '';
+    pipelineProgress.hidden = true;
+    resetProgress();
+    selectedInfluencers = [];
+
+    const live = document.getElementById('pipeline-live-status');
+    if (live) live.textContent = '';
+
+    const gapSection = $('#gap-analysis-section');
+    const gapResults = $('#gap-analysis-results');
+    if (gapSection) gapSection.hidden = true;
+    if (gapResults) gapResults.innerHTML = '';
+}

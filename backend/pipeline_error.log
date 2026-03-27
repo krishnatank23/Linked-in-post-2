@@ -1,0 +1,66 @@
+
+--- ERROR at 2026-03-26 12:21:32.210516 ---
+Error in pipeline: cannot access local variable 'json' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\resume_parser_agent.py", line 119, in run_resume_parser
+    resume_text = extract_resume_text(file_path)
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\resume_parser_agent.py", line 105, in extract_resume_text
+    return extract_text_from_pdf(file_path)
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\resume_parser_agent.py", line 78, in extract_text_from_pdf
+    reader = PdfReader(file_path)
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\PyPDF2\_reader.py", line 319, in __init__
+    self.read(stream)
+    ~~~~~~~~~^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\PyPDF2\_reader.py", line 1415, in read
+    self._find_eof_marker(stream)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\PyPDF2\_reader.py", line 1471, in _find_eof_marker
+    raise PdfReadError("EOF marker not found")
+PyPDF2.errors.PdfReadError: EOF marker not found
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\routes\pipeline.py", line 43, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path), timeout=60)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\asyncio\tasks.py", line 488, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\workflow.py", line 127, in run_pipeline
+    final_state = await pipeline.ainvoke(initial_state)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\main.py", line 3462, in ainvoke
+    async for chunk in self.astream(
+    ...<29 lines>...
+            chunks.append(chunk)
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\main.py", line 3111, in astream
+    async for _ in runner.atick(
+    ...<16 lines>...
+            yield o
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_runner.py", line 304, in atick
+    await arun_with_retry(
+    ...<15 lines>...
+    )
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_retry.py", line 211, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\_internal\_runnable.py", line 705, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step.ainvoke(input, config, **kwargs), context=context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\_internal\_runnable.py", line 473, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\workflow.py", line 24, in resume_parser_node
+    result = await run_resume_parser(state["resume_path"])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\Desktop\vs_code\Linked_in_post_2\backend\agents\resume_parser_agent.py", line 170, in run_resume_parser
+    except json.JSONDecodeError as e:
+           ^^^^
+UnboundLocalError: cannot access local variable 'json' where it is not associated with a value
+During task with name 'resume_parser' and id '321c1f92-f4cf-bed8-d8cf-797a1c13a65d'
+

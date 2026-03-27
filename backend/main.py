@@ -7,12 +7,14 @@ from fastapi.staticfiles import StaticFiles
 from database import init_db
 from routes.auth import router as auth_router
 from routes.pipeline import router as pipeline_router
-
+from scheduler import start_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create database tables
     await init_db()
+    # Startup: Initialize the automated posting scheduler
+    start_scheduler()
     yield
     # Shutdown: nothing to clean up
 

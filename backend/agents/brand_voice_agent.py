@@ -1,7 +1,11 @@
+import os
+import json
+import traceback
 from typing import Any
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
+from agents.groq_guard import guarded_groq_ainvoke
 
 load_dotenv()
 
@@ -86,7 +90,7 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
 
         # Step 2: Use Groq LLM to generate brand voice and persona
         llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
             temperature=0.4,
             api_key=os.getenv("GROQ_API_KEY"),
         )
@@ -94,10 +98,14 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
         chain = prompt | llm
 
-        response = await chain.ainvoke({
-            "profile_data": json.dumps(parsed_profile, indent=2),
-            "industry_context": industry_context,
-        })
+        response = await guarded_groq_ainvoke(
+            chain,
+            {
+                "profile_data": json.dumps(parsed_profile, indent=2),
+                "industry_context": industry_context,
+            },
+            timeout_seconds=60,
+        )
 
         # Parse the JSON response
         content = response.content.strip()
@@ -128,6 +136,16 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
             "error": f"Failed to parse brand voice response as JSON: {str(e)}",
         }
     except Exception as e:
+        err = str(e)
+        if "rate limit" in err.lower() or "tokens per day" in err.lower() or "429" in err:
+            return {
+                "status": "error",
+                "output": None,
+                "error": (
+                    "Groq API token limit reached during Brand Voice Agent. "
+                    "Please wait for Groq retry window, or reduce token usage / upgrade plan."
+                ),
+            }
         return {
             "status": "error",
             "output": None,

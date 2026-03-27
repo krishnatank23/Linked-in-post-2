@@ -42,13 +42,43 @@ class PipelineRequest(BaseModel):
 
 
 class AgentResult(BaseModel):
+    id: Optional[int] = None
     agent_name: str
     agent_description: str
     status: str
     output: Optional[Any] = None
     error: Optional[str] = None
+    is_saved: bool = False
 
 
 class PipelineResponse(BaseModel):
     message: str
     results: list[AgentResult]
+
+
+# ─── Gap Analysis Schemas ───
+class GapAnalysisRequest(BaseModel):
+    user_id: int
+    influencer_data: dict | list[dict]
+
+
+class GapAnalysisResponse(BaseModel):
+    message: str
+    results: list[AgentResult]
+
+
+class GeneratePostsRequest(BaseModel):
+    user_id: int
+    gap_analysis_data: dict
+
+
+class SendReminderRequest(BaseModel):
+    user_id: int
+    posts_data: dict
+
+
+# ─── Save Result Schemas ───
+class SaveResultRequest(BaseModel):
+    user_id: int
+    agent_name: str
+    save: bool = True

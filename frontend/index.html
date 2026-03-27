@@ -106,14 +106,14 @@
                         <label for="login-email">Email Address</label>
                         <div class="input-wrapper">
                             <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                            <input type="email" id="login-email" placeholder="you@example.com" value="demo@gmail.com" required>
+                            <input type="email" id="login-email" placeholder="you@example.com" required>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="login-password">Password</label>
                         <div class="input-wrapper">
                             <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                            <input type="password" id="login-password" placeholder="••••••••" value="1234" required>
+                            <input type="password" id="login-password" placeholder="••••••••" required>
                             <button type="button" class="password-toggle" data-target="login-password" title="Toggle Password">
                                 <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                             </button>
@@ -182,17 +182,18 @@
             <div class="pipeline-progress" id="pipeline-progress" hidden>
                 <div class="progress-steps">
                     <div class="progress-step" id="step-1">
-                        <div class="step-indicator">
-                            <span class="step-number">1</span>
-                        </div>
+                        <div class="step-icon">1</div>
                         <span class="step-label">Resume Parser</span>
                     </div>
                     <div class="progress-connector"></div>
                     <div class="progress-step" id="step-2">
-                        <div class="step-indicator">
-                            <span class="step-number">2</span>
-                        </div>
+                        <div class="step-icon">2</div>
                         <span class="step-label">Brand Voice</span>
+                    </div>
+                    <div class="progress-connector"></div>
+                    <div class="progress-step" id="step-3">
+                        <div class="step-icon">3</div>
+                        <span class="step-label">Influence Scout</span>
                     </div>
                 </div>
             </div>
@@ -200,6 +201,17 @@
             <!-- Agent Output Cards -->
             <div class="agent-outputs" id="agent-outputs">
                 <!-- Cards are dynamically injected by app.js -->
+            </div>
+
+            <!-- Gap Analysis + Post Strategy (manual influencer selection path) -->
+            <div id="gap-analysis-section" class="agent-outputs" hidden>
+                <div class="studio-hero glass-card" style="margin-top: 1rem;">
+                    <div class="hero-content">
+                        <h2>📈 Gap Analysis & Post Strategy</h2>
+                        <p>Detailed comparison and ready-to-publish content based on your selected influencer.</p>
+                    </div>
+                </div>
+                <div id="gap-analysis-results"></div>
             </div>
         </div>
     </section>

@@ -1,3 +1,5 @@
+import os
+import traceback
 from typing import Any
 from PyPDF2 import PdfReader
 from docx import Document
@@ -5,6 +7,9 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
+import asyncio
+import json
+from agents.groq_guard import guarded_groq_ainvoke
 load_dotenv()
 
 RESUME_PARSER_PROMPT = """You are an expert resume and LinkedIn profile analyzer. 
@@ -125,7 +130,7 @@ async def run_resume_parser(file_path: str) -> dict[str, Any]:
 
         # Step 2: Use Groq LLM to parse and structure the resume
         llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
             temperature=0.1,
             api_key=os.getenv("GROQ_API_KEY"),
         )
@@ -133,10 +138,19 @@ async def run_resume_parser(file_path: str) -> dict[str, Any]:
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
         chain = prompt | llm
 
-        response = await chain.ainvoke({"resume_text": resume_text})
+        try:
+            response = await guarded_groq_ainvoke(
+                chain,
+                {"resume_text": resume_text},
+                timeout_seconds=45,
+            )
+        except asyncio.TimeoutError:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "Resume parsing timed out after 45 seconds. The LLM service may be slow.",
+            }
 
-        # Parse the JSON response
-        import json
         content = response.content.strip()
         # Clean up potential markdown fences
         if content.startswith("```"):
@@ -165,6 +179,17 @@ async def run_resume_parser(file_path: str) -> dict[str, Any]:
             "error": f"Failed to parse LLM response as JSON: {str(e)}",
         }
     except Exception as e:
+        err = str(e)
+        if "rate limit" in err.lower() or "tokens per day" in err.lower() or "429" in err:
+            return {
+                "status": "error",
+                "output": None,
+                "error": (
+                    "Groq API token limit reached during Resume Parser. "
+                    "Please wait for the retry window shown by Groq (for example, 'try again in 7m9s'), "
+                    "or upgrade Groq tier / use a lower-token model."
+                ),
+            }
         return {
             "status": "error",
             "output": None,

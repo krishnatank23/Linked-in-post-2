@@ -8,7 +8,15 @@ import traceback
 
 from database import get_db
 from models import User, AgentOutput
-from schemas import PipelineRequest, PipelineResponse, AgentResult, GapAnalysisRequest, GapAnalysisResponse, SaveResultRequest, GeneratePostsRequest, SendReminderRequest
+from schemas import (
+    PipelineRequest, PipelineResponse, AgentResult,
+    GapAnalysisRequest, GapAnalysisResponse, SaveResultRequest,
+    GeneratePostsRequest, SendReminderRequest,
+    StepResumeParserRequest, StepBrandVoiceRequest, StepInfluencerScoutRequest, StepResponse,
+)
+from agents.resume_parser_agent import run_resume_parser
+from agents.brand_voice_agent import run_brand_voice_agent
+from agents.influencer_agent import run_influencer_search
 from agents.workflow import run_pipeline
 from agents.gap_analyzer_agent import run_gap_analysis
 from agents.post_generator_agent import run_post_generation
@@ -174,6 +182,177 @@ async def save_agent_result(request: SaveResultRequest, db: AsyncSession = Depen
     await db.commit()
     
     return {"message": "Output saved to profile" if request.save else "Output removed from saved"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Step-by-Step Pipeline Endpoints (Wizard Flow)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/pipeline/step/resume-parser", response_model=StepResponse)
+async def step_resume_parser(request: StepResumeParserRequest, db: AsyncSession = Depends(get_db)):
+    """Step 1: Run only the Resume Parser agent."""
+    result = await db.execute(select(User).where(User.id == request.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.resume_path:
+        raise HTTPException(status_code=400, detail="No resume uploaded for this user")
+
+    # Clear previous agent outputs for a fresh run
+    prev_outputs = await db.execute(select(AgentOutput).where(AgentOutput.user_id == user.id))
+    for output in prev_outputs.scalars().all():
+        await db.delete(output)
+    await db.commit()
+
+    try:
+        set_current_user_context(user.id)
+        clear_status(user.id)
+
+        ar = await asyncio.wait_for(
+            run_resume_parser(user.resume_path),
+            timeout=PIPELINE_TIMEOUT_SECONDS,
+        )
+
+        agent_output = AgentOutput(
+            user_id=user.id,
+            agent_name="Resume Parser Agent",
+            agent_description="Extracts personal info, experience, skills, education, and all details from your resume using AI",
+            status=ar["status"],
+            output_data=ar.get("output"),
+            error_message=ar.get("error"),
+        )
+        db.add(agent_output)
+        await db.flush()
+
+        # Cache parsed profile on user
+        if ar.get("status") == "success" and ar.get("output"):
+            user.parsed_profile_cache = ar["output"].get("parsed_profile")
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        return StepResponse(
+            message="Resume parsed successfully" if ar["status"] == "success" else "Resume parsing failed",
+            result=AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=ar["status"],
+                output=ar.get("output"),
+                error=ar.get("error"),
+            ),
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="Resume parsing timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {str(e)}")
+    finally:
+        set_current_user_context(None)
+        clear_status(user.id)
+
+
+@router.post("/pipeline/step/brand-voice", response_model=StepResponse)
+async def step_brand_voice(request: StepBrandVoiceRequest, db: AsyncSession = Depends(get_db)):
+    """Step 2: Run only the Brand Voice agent using parsed profile from step 1."""
+    result = await db.execute(select(User).where(User.id == request.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        set_current_user_context(user.id)
+        clear_status(user.id)
+
+        ar = await asyncio.wait_for(
+            run_brand_voice_agent(request.parsed_profile),
+            timeout=PIPELINE_TIMEOUT_SECONDS,
+        )
+
+        agent_output = AgentOutput(
+            user_id=user.id,
+            agent_name="Brand Voice & Persona Agent",
+            agent_description="Generates your professional identity, brand voice, and personal summary based on your profile",
+            status=ar["status"],
+            output_data=ar.get("output"),
+            error_message=ar.get("error"),
+        )
+        db.add(agent_output)
+        await db.flush()
+
+        # Cache brand voice on user
+        if ar.get("status") == "success" and ar.get("output"):
+            user.brand_voice_cache = ar["output"].get("brand_analysis")
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        return StepResponse(
+            message="Brand voice generated successfully" if ar["status"] == "success" else "Brand voice generation failed",
+            result=AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=ar["status"],
+                output=ar.get("output"),
+                error=ar.get("error"),
+            ),
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="Brand voice generation timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Brand voice generation failed: {str(e)}")
+    finally:
+        set_current_user_context(None)
+        clear_status(user.id)
+
+
+@router.post("/pipeline/step/influencer-scout", response_model=StepResponse)
+async def step_influencer_scout(request: StepInfluencerScoutRequest, db: AsyncSession = Depends(get_db)):
+    """Step 3: Run only the Influencer Scout agent using profile + brand voice."""
+    result = await db.execute(select(User).where(User.id == request.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        set_current_user_context(user.id)
+        clear_status(user.id)
+
+        ar = await asyncio.wait_for(
+            run_influencer_search(request.parsed_profile, request.brand_voice),
+            timeout=PIPELINE_TIMEOUT_SECONDS,
+        )
+
+        agent_output = AgentOutput(
+            user_id=user.id,
+            agent_name="Influence & Idol Scout Agent",
+            agent_description="Finds your industry idols and top LinkedIn influencers matching your professional domain",
+            status=ar["status"],
+            output_data=ar.get("output"),
+            error_message=ar.get("error"),
+        )
+        db.add(agent_output)
+        await db.flush()
+        await db.commit()
+
+        return StepResponse(
+            message="Influencer search completed" if ar["status"] == "success" else "Influencer search failed",
+            result=AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=ar["status"],
+                output=ar.get("output"),
+                error=ar.get("error"),
+            ),
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="Influencer search timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Influencer search failed: {str(e)}")
+    finally:
+        set_current_user_context(None)
+        clear_status(user.id)
 
 
 @router.post("/pipeline/gap-analysis", response_model=GapAnalysisResponse)

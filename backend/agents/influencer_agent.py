@@ -84,9 +84,9 @@ async def generate_search_query(profile_data: dict, brand_voice: dict) -> str:
     except Exception as e:
         print(f"Query generation failed: {e}")
         # Fallback query
-        industry = profile_data.get("industry", "industry")
-        role = profile_data.get("current_role", "professional")
-        return f"Top {industry} and {role} influencers on LinkedIn"
+        industry = profile_data.get("industry") or "industry"
+        role = profile_data.get("current_role") or "professional"
+        return f"Top {industry} {role} influencers on LinkedIn"
 
 async def search_influencers(query: str) -> list[dict[str, Any]]:
     """Search for LinkedIn profiles and return up to 15 suggestions."""

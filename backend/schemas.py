@@ -77,6 +77,27 @@ class SendReminderRequest(BaseModel):
     posts_data: dict
 
 
+# ─── Step-by-Step Pipeline Schemas ───
+class StepResumeParserRequest(BaseModel):
+    user_id: int
+
+
+class StepBrandVoiceRequest(BaseModel):
+    user_id: int
+    parsed_profile: dict
+
+
+class StepInfluencerScoutRequest(BaseModel):
+    user_id: int
+    parsed_profile: dict
+    brand_voice: dict
+
+
+class StepResponse(BaseModel):
+    message: str
+    result: AgentResult
+
+
 # ─── Save Result Schemas ───
 class SaveResultRequest(BaseModel):
     user_id: int

@@ -64,20 +64,16 @@ OUTPUT FORMAT (JSON ONLY):
         {{
             "type": "Educational / Trend-based / Funny / etc.",
             "content": "The full post text following humanization rules...",
-            "image_search_query": "Short web query to find a relevant real-world image for this post",
-            "image_prompt": "A detailed prompt to generate an image or a description of a photo to take",
             "goal": "Bridge the gap / Increase engagement / Show authority"
         }},
         {{
             "type": "...",
             "content": "...",
-            "image_prompt": "...",
             "goal": "..."
         }},
         {{
             "type": "...",
             "content": "...",
-            "image_prompt": "...",
             "goal": "..."
         }}
     ]
@@ -87,94 +83,7 @@ Return ONLY the JSON object. No markdown, no extra text.
 """
 
 
-def _build_image_query(post: dict[str, Any]) -> str:
-    query = (post.get("image_search_query") or "").strip()
-    if query:
-        return query
 
-    post_type = (post.get("type") or "LinkedIn post").strip()
-    content = (post.get("content") or "").strip()
-    first_line = content.split("\n", 1)[0][:120].strip()
-    if first_line:
-        return f"{post_type} LinkedIn trend {first_line}"
-    return f"{post_type} LinkedIn trend image"
-
-
-def _search_images_serper(query: str) -> list[dict[str, str]]:
-    api_key = os.getenv("SERPER_API_KEY")
-    if not api_key:
-        return []
-
-    try:
-        response = requests.post(
-            "https://google.serper.dev/images",
-            headers={
-                "X-API-KEY": api_key,
-                "Content-Type": "application/json",
-            },
-            data=json.dumps({"q": query, "num": 5}),
-            timeout=20,
-        )
-        if response.status_code != 200:
-            return []
-
-        payload = response.json()
-        results = []
-        for item in payload.get("images", []):
-            image_url = (item.get("imageUrl") or "").strip()
-            page_url = (item.get("link") or "").strip()
-            if not image_url:
-                continue
-            results.append(
-                {
-                    "title": (item.get("title") or "").strip(),
-                    "image_url": image_url,
-                    "page_url": page_url,
-                    "source": (item.get("source") or "").strip(),
-                }
-            )
-        return results[:3]
-    except Exception:
-        return []
-
-
-def _search_images_duckduckgo(query: str) -> list[dict[str, str]]:
-    try:
-        from duckduckgo_search import DDGS
-
-        results = []
-        with DDGS() as ddgs:
-            for item in ddgs.images(query, max_results=5):
-                image_url = (item.get("image") or "").strip()
-                page_url = (item.get("url") or "").strip()
-                if not image_url:
-                    continue
-                results.append(
-                    {
-                        "title": (item.get("title") or "").strip(),
-                        "image_url": image_url,
-                        "page_url": page_url,
-                        "source": (item.get("source") or "DuckDuckGo").strip(),
-                    }
-                )
-        return results[:3]
-    except Exception:
-        return []
-
-
-def enrich_posts_with_web_images(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    enriched = []
-    for post in posts:
-        post_copy = dict(post)
-        query = _build_image_query(post_copy)
-        images = _search_images_serper(query)
-        if not images:
-            images = _search_images_duckduckgo(query)
-
-        post_copy["image_search_query"] = query
-        post_copy["reference_images"] = images
-        enriched.append(post_copy)
-    return enriched
 
 
 async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict) -> dict[str, Any]:
@@ -212,9 +121,6 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             content = content[4:].strip()
             
         post_results = json.loads(content)
-        posts = post_results.get("posts", [])
-        if isinstance(posts, list):
-            post_results["posts"] = enrich_posts_with_web_images(posts)
         
         return {
             "status": "success",

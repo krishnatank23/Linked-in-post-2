@@ -21,6 +21,97 @@ router = APIRouter(prefix="/api", tags=["pipeline"])
 PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "600"))
 
 
+def _normalize_selected_influencers(raw_influencer_data: dict | list[dict] | None) -> list[dict]:
+    """Normalize and validate selected influencers payload from frontend."""
+    if isinstance(raw_influencer_data, dict):
+        selected_influencers = [raw_influencer_data]
+    elif isinstance(raw_influencer_data, list):
+        selected_influencers = [inf for inf in raw_influencer_data if isinstance(inf, dict)]
+    else:
+        selected_influencers = []
+
+    valid_influencers = []
+    for influencer in selected_influencers:
+        influencer_link = str(influencer.get("link") or "").strip().lower()
+        influencer_title = str(influencer.get("title") or "").strip()
+        if influencer_title and "linkedin.com" in influencer_link:
+            valid_influencers.append(influencer)
+    return valid_influencers
+
+
+async def _get_latest_influencer_candidates(db: AsyncSession, user_id: int) -> list[dict]:
+    """Get influencer candidates from latest successful Influence Scout output."""
+    result = await db.execute(
+        select(AgentOutput)
+        .where(
+            AgentOutput.user_id == user_id,
+            AgentOutput.agent_name == "Influence & Idol Scout Agent",
+            AgentOutput.status == "success",
+        )
+        .order_by(AgentOutput.created_at.desc())
+        .limit(1)
+    )
+    latest = result.scalar_one_or_none()
+    if not latest or not latest.output_data:
+        return []
+    return latest.output_data.get("influencers") or []
+
+
+def _build_posting_recommendation(
+    gap_output: dict | None,
+    influencer_payload: dict,
+    post_output: dict | None,
+) -> dict:
+    """Create a clear posting recommendation summary based on gap + selected influencers."""
+    gap_output = gap_output or {}
+    post_output = post_output or {}
+    gap_analysis = gap_output.get("gap_analysis") or {}
+
+    if "selected_influencers" in influencer_payload:
+        selected_count = len(influencer_payload.get("selected_influencers") or [])
+    else:
+        selected_count = 1
+
+    missing_elements = gap_analysis.get("key_missing_elements") or []
+    gap_score = len(missing_elements)
+
+    # Dynamic recommendation by gap depth + benchmark breadth.
+    recommended_posts_per_week = 3
+    if gap_score >= 5 or selected_count >= 5:
+        recommended_posts_per_week = 5
+    elif gap_score >= 3 or selected_count >= 3:
+        recommended_posts_per_week = 4
+
+    suggested_days = post_output.get("posting_schedule_days") or []
+    posting_time = post_output.get("posting_time_utc") or "14:00"
+
+    if not suggested_days:
+        fallback_days_map = {
+            3: ["Monday", "Wednesday", "Friday"],
+            4: ["Monday", "Tuesday", "Thursday", "Saturday"],
+            5: ["Monday", "Tuesday", "Wednesday", "Friday", "Saturday"],
+        }
+        suggested_days = fallback_days_map.get(recommended_posts_per_week, ["Monday", "Wednesday", "Friday"])
+
+    frequency_text = post_output.get("posting_frequency") or f"{recommended_posts_per_week} times per week"
+
+    rationale = (
+        f"Based on {selected_count} selected influencer(s) and {gap_score} identified gap element(s), "
+        f"the recommended cadence is {recommended_posts_per_week} posts per week. "
+        f"This frequency balances authority-building speed with consistency for your current gap level."
+    )
+
+    return {
+        "posting_frequency": frequency_text,
+        "recommended_posts_per_week": recommended_posts_per_week,
+        "recommended_days": suggested_days,
+        "recommended_time_utc": posting_time,
+        "benchmark_influencer_count": selected_count,
+        "gap_elements_count": gap_score,
+        "rationale": rationale,
+    }
+
+
 @router.post("/pipeline/run", response_model=PipelineResponse)
 async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depends(get_db)):
     """Run the full agentic AI pipeline for a given user."""
@@ -46,7 +137,7 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
         set_current_user_context(user.id)
         clear_status(user.id)
         
-        # Timeout guard for end-to-end pipeline execution, including throttled image generation.
+        # Timeout guard for end-to-end pipeline execution.
         try:
             agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
@@ -179,26 +270,37 @@ async def save_agent_result(request: SaveResultRequest, db: AsyncSession = Depen
 @router.post("/pipeline/gap-analysis", response_model=GapAnalysisResponse)
 async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = Depends(get_db)):
     """Analyze the gap between a user and selected influencer(s)."""
-    # Enforce explicit influencer selection before running gap analysis.
-    raw_influencer_data = request.influencer_data
-    if isinstance(raw_influencer_data, dict):
-        selected_influencers = [raw_influencer_data]
-    elif isinstance(raw_influencer_data, list):
-        selected_influencers = [inf for inf in raw_influencer_data if isinstance(inf, dict)]
-    else:
-        selected_influencers = []
-
-    valid_influencers = []
-    for influencer in selected_influencers:
-        influencer_link = str(influencer.get("link") or "").strip().lower()
-        influencer_title = str(influencer.get("title") or "").strip()
-        if influencer_title and "linkedin.com" in influencer_link:
-            valid_influencers.append(influencer)
+    # Enforce explicit human-in-the-loop influencer selection before running gap analysis.
+    valid_influencers = _normalize_selected_influencers(request.influencer_data)
 
     if not valid_influencers:
         raise HTTPException(
             status_code=400,
             detail="Please select at least one valid influencer from the list before running gap analysis."
+        )
+
+    # Enforce that selected influencers must come from latest generated influencer list.
+    available_candidates = await _get_latest_influencer_candidates(db, request.user_id)
+    available_links = {
+        str(item.get("link") or "").strip().lower()
+        for item in available_candidates
+        if isinstance(item, dict)
+    }
+    selected_links = {
+        str(item.get("link") or "").strip().lower()
+        for item in valid_influencers
+    }
+
+    if not available_links:
+        raise HTTPException(
+            status_code=400,
+            detail="Run pipeline analysis first to generate influencer list, then select influencer(s) and continue."
+        )
+
+    if not selected_links.issubset(available_links):
+        raise HTTPException(
+            status_code=400,
+            detail="Selected influencer is not from the latest generated list. Please select from shown results and retry."
         )
 
     influencer_payload = (
@@ -245,11 +347,22 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
             detail="User must run full pipeline analysis before gap analysis"
         )
 
-    # 5. Run Gap Analysis & Post Generation Agents
+    # 5. Run post-selection chain: Gap Analysis -> Posting Recommendation -> Post Generation
     try:
         # Run Gap Analysis
         ar_gap = await run_gap_analysis(profile_data, brand_voice, influencer_payload)
-        
+
+        # Persist gap-analysis result for downstream step gating.
+        db.add(AgentOutput(
+            user_id=user.id,
+            agent_name="Gap Analysis & Content Strategist",
+            agent_description="Identifies professional gaps and provides a custom LinkedIn content plan",
+            status=ar_gap["status"],
+            output_data=ar_gap.get("output"),
+            error_message=ar_gap.get("error"),
+        ))
+        await db.commit()
+
         results = [
             AgentResult(
                 agent_name="Gap Analysis & Content Strategist",
@@ -259,10 +372,75 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
                 error=ar_gap.get("error"),
             )
         ]
-        
+
+        if ar_gap["status"] != "success" or not ar_gap.get("output"):
+            return GapAnalysisResponse(
+                message="Gap analysis completed but downstream steps were skipped due to gap-analysis failure.",
+                results=results,
+            )
+
+        # Run Post Generation immediately after successful gap analysis.
+        ar_posts = await run_post_generation(profile_data, brand_voice, ar_gap["output"])
+
+        recommendation_output = _build_posting_recommendation(
+            ar_gap.get("output"),
+            influencer_payload,
+            ar_posts.get("output"),
+        )
+
+        # Persist recommendation as an agent output for auditability.
+        db.add(AgentOutput(
+            user_id=user.id,
+            agent_name="Posting Frequency Recommendation Agent",
+            agent_description="Recommends personalized weekly posting cadence based on gap depth and selected influencers",
+            status="success",
+            output_data=recommendation_output,
+            error_message=None,
+        ))
+
+        results.append(
+            AgentResult(
+                agent_name="Posting Frequency Recommendation Agent",
+                agent_description="Recommends personalized weekly posting cadence based on gap depth and selected influencers",
+                status="success",
+                output=recommendation_output,
+                error=None,
+            )
+        )
+
+        # Persist post generation output and user posting schedule.
+        db.add(AgentOutput(
+            user_id=user.id,
+            agent_name="LinkedIn Post Generator",
+            agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+            status=ar_posts["status"],
+            output_data=ar_posts.get("output"),
+            error_message=ar_posts.get("error"),
+        ))
+
+        if ar_posts["status"] == "success":
+            out_data = ar_posts.get("output") or {}
+            if "posting_schedule_days" in out_data:
+                user.posting_schedule = out_data["posting_schedule_days"]
+            if "posting_time_utc" in out_data:
+                user.posting_time_utc = out_data["posting_time_utc"]
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        results.append(
+            AgentResult(
+                agent_name="LinkedIn Post Generator",
+                agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+                status=ar_posts["status"],
+                output=ar_posts.get("output"),
+                error=ar_posts.get("error"),
+            )
+        )
+
         return GapAnalysisResponse(
-            message="Gap analysis completed successfully. Strategy is ready for review.",
-            results=results
+            message="Post-selection pipeline completed: gap analysis, posting recommendation, and post generation are ready.",
+            results=results,
         )
     except Exception as e:
         import traceback
@@ -289,6 +467,23 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
             detail="User must run full pipeline analysis before generating posts"
         )
 
+    # Enforce HITL order: user must complete gap analysis step first.
+    latest_gap = await db.execute(
+        select(AgentOutput)
+        .where(
+            AgentOutput.user_id == user.id,
+            AgentOutput.agent_name == "Gap Analysis & Content Strategist",
+            AgentOutput.status == "success",
+        )
+        .order_by(AgentOutput.created_at.desc())
+        .limit(1)
+    )
+    if latest_gap.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select influencer(s) and complete gap analysis before generating posts."
+        )
+
     try:
         results = []
         
@@ -304,6 +499,14 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         )
 
         if ar_posts["status"] == "success":
+            db.add(AgentOutput(
+                user_id=user.id,
+                agent_name="LinkedIn Post Generator",
+                agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+                status=ar_posts["status"],
+                output_data=ar_posts.get("output"),
+                error_message=ar_posts.get("error"),
+            ))
             # Append Post Generator result first
             results.append(post_agent_result)
             
@@ -339,6 +542,23 @@ async def send_reminder_email(request: SendReminderRequest, db: AsyncSession = D
     posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
     if not isinstance(posts, list) or not posts:
         raise HTTPException(status_code=400, detail="No generated posts found to send")
+
+    # Enforce HITL order: reminder requires successful post generation first.
+    latest_posts = await db.execute(
+        select(AgentOutput)
+        .where(
+            AgentOutput.user_id == user.id,
+            AgentOutput.agent_name == "LinkedIn Post Generator",
+            AgentOutput.status == "success",
+        )
+        .order_by(AgentOutput.created_at.desc())
+        .limit(1)
+    )
+    if latest_posts.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Generate posts after influencer selection and gap analysis before sending reminder."
+        )
 
     try:
         ar_email = await run_email_reminder(user.email, posts_payload)

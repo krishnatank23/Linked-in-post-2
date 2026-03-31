@@ -266,6 +266,7 @@ async function runPipeline() {
         // Render results with staggered animation
         renderResults(data.results);
         showToast('AI analysis completed!', 'success');
+        showPipelineNotices(data.results);
 
     } catch (err) {
         showToast(err.message, 'error');
@@ -370,6 +371,15 @@ function renderResults(results) {
     setTimeout(() => {
         renderDynamicActionPanel(results);
     }, (results.length * 300) + 200);
+}
+
+function showPipelineNotices(results) {
+    if (!Array.isArray(results)) return;
+    const influencerResult = results.find(r => (r.agent_name || '').includes('Influence'));
+    const warning = influencerResult?.output?.warning;
+    if (warning) {
+        showToast(warning, 'info');
+    }
 }
 
 // ─── Dynamic Action Panel ───
@@ -560,6 +570,11 @@ function renderAgentOutput(result) {
         return renderGapAnalysisOutput(result.output);
     }
 
+    // Agent 4.5: Posting recommendation
+    if (result.agent_name.includes('Posting Frequency Recommendation')) {
+        return renderPostingRecommendationOutput(result.output);
+    }
+
     // Agent 5: Post Generator
     if (result.agent_name.includes('Post Generator')) {
         return renderPostGeneratorOutput(result.output);
@@ -579,6 +594,7 @@ function renderAgentOutput(result) {
 function renderInfluencerOutput(output) {
     const influencers = output.influencers || [];
     let html = '';
+    const warning = output.warning;
 
     if (influencers.length === 0) {
         return `
@@ -594,6 +610,7 @@ function renderInfluencerOutput(output) {
     html += `
         <div class="output-section">
             <div class="output-section-title">🔍 Search Query: "${escapeHtml(output.search_query_used)}"</div>
+            ${warning ? `<div class="error-display" style="margin-bottom: 0.75rem; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">ℹ️ ${escapeHtml(warning)}</div>` : ''}
             <p style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 1.5rem;">
                 We found up to 10-15 professionals who match your profile but are more established on LinkedIn. Select one or more influencers to continue. Gap analysis and all next steps run only for your selected influencers.
             </p>
@@ -717,13 +734,13 @@ async function runGapAnalysis(btn, influencers) {
             throw new Error(data.detail || 'Gap analysis failed');
         }
 
-        // Show and render results
+        // Show and render post-selection chained results
         section.hidden = false;
         renderGapAnalysisResults(data.results);
         
         // Scroll to the results
         section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        showToast('Gap Analysis & Strategy Generated!', 'success');
+        showToast('Post-selection pipeline completed: gap, recommendation, and posts are ready.', 'success');
 
     } catch (err) {
         showToast(err.message, 'error');
@@ -737,6 +754,15 @@ function renderGapAnalysisResults(results) {
     container.innerHTML = '';
 
     results.forEach(result => {
+        if (result.status === 'error') {
+            container.innerHTML += `
+                <div class="error-display" style="margin-top: 1rem;">
+                    ⚠️ ${escapeHtml(result.agent_name || 'Agent')} failed: ${escapeHtml(result.error || 'Unknown error')}
+                </div>
+            `;
+            return;
+        }
+
         if (result.agent_name.includes('Gap Analysis')) {
             const output = result.output || {};
             const gap = output.gap_analysis || {};
@@ -804,38 +830,41 @@ function renderGapAnalysisResults(results) {
                     </div>
                 </div>
             `;
-            
+        }
+
+        if (result.agent_name.includes('Posting Frequency Recommendation')) {
             container.innerHTML += `
-                <div id="post-generation-container" style="margin-top: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; border-top: 2px solid var(--border-color); padding-top: 2rem;">
-                    <p style="color: var(--text-secondary); text-align: center; font-size: 1.1rem;">Ready to turn this strategy into action?</p>
-                    <button id="btn-generate-posts" class="btn btn-primary" style="background: var(--gradient-primary); font-size: 1rem; padding: 12px 24px;">
-                        <span class="btn-text">✨ Generate LinkedIn Posts from Strategy</span>
-                        <span class="btn-loader" hidden><span class="spinner"></span></span>
-                    </button>
-                    <div id="post-generation-results" style="width: 100%; margin-top: 1rem;"></div>
+                <div class="strategy-card" style="margin-top: 1.25rem;">
+                    ${renderPostingRecommendationOutput(result.output || {})}
                 </div>
             `;
-            
-            // Attach event listener for the new button
-            setTimeout(() => {
-                const btn = document.getElementById('btn-generate-posts');
-                if (btn) {
-                    btn.addEventListener('click', () => {
-                        runPostGenerationFromStrategy(btn, output);
-                    });
-                }
-            }, 100);
+        }
+
+        if (result.agent_name.includes('Post Generator')) {
+            container.innerHTML += `
+                <div class="strategy-card" style="margin-top: 1.25rem;">
+                    ${renderPostGeneratorOutput(result.output || {})}
+                </div>
+            `;
         }
     });
+}
 
-    if (results.some(r => r.status === 'error')) {
-        const errorResult = results.find(r => r.status === 'error');
-        container.innerHTML += `
-            <div class="error-display" style="margin-top: 1rem;">
-                ⚠️ One or more agents failed: ${escapeHtml(errorResult.error)}
+function renderPostingRecommendationOutput(output) {
+    const days = output.recommended_days || [];
+    return `
+        <div class="output-section">
+            <div class="output-section-title">📅 Posting Frequency Recommendation</div>
+            <div class="output-grid">
+                ${renderInfoItem('Posting Frequency', output.posting_frequency || 'N/A')}
+                ${renderInfoItem('Posts Per Week', String(output.recommended_posts_per_week || 'N/A'))}
+                ${renderInfoItem('Recommended Time (UTC)', output.recommended_time_utc || 'N/A')}
+                ${renderInfoItem('Influencers Selected', String(output.benchmark_influencer_count || 'N/A'))}
             </div>
-        `;
-    }
+            ${renderTagSection('Recommended Days', days, 'tag-cyan')}
+            <div class="text-block" style="margin-top: 0.75rem;"><strong>Why this cadence:</strong> ${escapeHtml(output.rationale || 'N/A')}</div>
+        </div>
+    `;
 }
 
 async function runPostGenerationFromStrategy(btn, gapAnalysisData) {
@@ -993,30 +1022,11 @@ function renderPostGeneratorOutput(output) {
 
                         <div class="post-action-row">
                             <button class="btn btn-ghost post-action-btn" onclick="copyPostFromEncoded('${encodeURIComponent(post.content || '')}')">Copy Post</button>
-                            ${post.image_search_query ? `<button class="btn btn-ghost post-action-btn" onclick="copyPostFromEncoded('${encodeURIComponent(post.image_search_query)}')">Copy Image Query</button>` : ''}
                         </div>
 
                         <div class="post-meta-grid">
                             ${renderInfoItem('Goal', post.goal || 'N/A')}
-                            ${renderInfoItem('Image Prompt', post.image_prompt || 'N/A')}
                         </div>
-
-
-                        ${post.image_search_query ? `<p class="exp-desc"><strong>Image Search Query:</strong> ${escapeHtml(post.image_search_query)}</p>` : ''}
-
-                        ${(post.reference_images && post.reference_images.length > 0) ? `
-                            <div class="post-image-section">
-                                <p class="exp-desc" style="margin-bottom: 0.5rem;"><strong>Suggested Real Images:</strong></p>
-                                <div class="image-suggestions-grid">
-                                    ${post.reference_images.map((img, idx) => `
-                                        <a href="${img.page_url || img.image_url}" target="_blank" rel="noopener noreferrer" class="image-suggestion-card">
-                                            <img src="${img.image_url}" alt="Suggested image ${idx + 1}" class="image-suggestion-preview" loading="lazy"/>
-                                            <div class="image-suggestion-caption">${escapeHtml(img.title || img.source || 'Open source')}</div>
-                                        </a>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        ` : '<p class="exp-desc"><strong>Suggested Real Images:</strong> No web images found for this post yet.</p>'}
                     </article>
                 `).join('')}
             </div>

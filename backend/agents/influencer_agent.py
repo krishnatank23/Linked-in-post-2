@@ -88,56 +88,87 @@ async def generate_search_query(profile_data: dict, brand_voice: dict) -> str:
         role = profile_data.get("current_role", "professional")
         return f"Top {industry} and {role} influencers on LinkedIn"
 
-async def search_influencers(query: str) -> list[dict[str, Any]]:
-    """Search for LinkedIn profiles and return up to 15 suggestions."""
+async def search_influencers_with_meta(query: str) -> dict[str, Any]:
+    """Search LinkedIn profiles and return results + provider metadata."""
     influencers = []
+    serper_blocked = False
+    used_serper = False
+    used_duckduckgo = False
+
+    # Some Serper accounts reject strict `site:` operators.
+    # Try multiple query styles from strict -> relaxed.
+    serper_queries = [
+        f"site:linkedin.com/in/ {query}",
+        f"{query} LinkedIn profile",
+        f"top influencers {query} LinkedIn",
+    ]
 
     serper_key = os.getenv("SERPER_API_KEY")
     if not serper_key:
         print("SERPER_API_KEY missing; skipping Serper and using DuckDuckGo fallback")
     else:
-        try:
-            url = "https://google.serper.dev/search"
-            payload = json.dumps({
-                "q": f"site:linkedin.com/in/ {query}",
-                "num": 25
-            })
-            headers = {
-                'X-API-KEY': serper_key,
-                'Content-Type': 'application/json'
-            }
+        url = "https://google.serper.dev/search"
+        headers = {
+            "X-API-KEY": serper_key,
+            "Content-Type": "application/json",
+        }
+        for serper_query in serper_queries:
+            try:
+                payload = json.dumps({
+                    "q": serper_query,
+                    "num": 25,
+                })
+                response = requests.post(url, headers=headers, data=payload, timeout=20)
 
-            response = requests.request("POST", url, headers=headers, data=payload, timeout=20)
-            if response.status_code != 200:
-                print(f"Serper returned status {response.status_code}: {response.text[:200]}")
-            else:
-                results = response.json()
-                for result in results.get("organic", []):
-                    if "linkedin.com/in/" in result.get("link", ""):
-                        influencers.append({
-                            "title": result.get("title", ""),
-                            "link": result.get("link", ""),
-                            "snippet": result.get("snippet", ""),
-                        })
-        except Exception as e:
-            print(f"Serper search failed: {e}")
+                if response.status_code == 200:
+                    used_serper = True
+                    results = response.json()
+                    for result in results.get("organic", []):
+                        link = result.get("link", "")
+                        if "linkedin.com/in/" in link:
+                            influencers.append({
+                                "title": result.get("title", ""),
+                                "link": link,
+                                "snippet": result.get("snippet", ""),
+                            })
+                    if influencers:
+                        break
+                elif response.status_code == 400:
+                    serper_blocked = True
+                    print(f"Serper rejected query variant ({serper_query[:60]}...). Trying fallback variant.")
+                    continue
+                else:
+                    print(f"Serper returned status {response.status_code}: {response.text[:200]}")
+            except Exception as e:
+                print(f"Serper search failed for variant '{serper_query[:50]}...': {e}")
 
     # Fallback: DuckDuckGo search if Serper yields nothing.
     if not influencers:
         try:
             from duckduckgo_search import DDGS
+            used_duckduckgo = True
 
             with DDGS() as ddgs:
-                for result in ddgs.text(f"site:linkedin.com/in/ {query}", max_results=25):
-                    link = result.get("href", "")
-                    if "linkedin.com/in/" in link:
-                        influencers.append({
-                            "title": result.get("title", ""),
-                            "link": link,
-                            "snippet": result.get("body", ""),
-                        })
+                ddg_queries = [
+                    f"site:linkedin.com/in/ {query}",
+                    f"{query} LinkedIn profile",
+                ]
+                for ddg_query in ddg_queries:
+                    for result in ddgs.text(ddg_query, max_results=25):
+                        link = result.get("href", "")
+                        if "linkedin.com/in/" in link:
+                            influencers.append({
+                                "title": result.get("title", ""),
+                                "link": link,
+                                "snippet": result.get("body", ""),
+                            })
+                    if influencers:
+                        break
         except Exception as e:
             print(f"DuckDuckGo fallback search failed: {e}")
+
+    if serper_blocked and influencers:
+        print("Serper blocked some query formats, but fallback search succeeded.")
 
     # Deduplicate by URL while preserving order.
     deduped = []
@@ -149,7 +180,25 @@ async def search_influencers(query: str) -> list[dict[str, Any]]:
         seen.add(link)
         deduped.append(inf)
 
-    return deduped[:15]
+    provider = "serper"
+    warning = None
+    if used_duckduckgo and deduped:
+        provider = "duckduckgo"
+    if serper_blocked:
+        warning = "Primary search provider rejected this query format. Fallback search was used successfully."
+
+    return {
+        "influencers": deduped[:15],
+        "provider": provider,
+        "warning": warning,
+        "serper_blocked": serper_blocked,
+    }
+
+
+async def search_influencers(query: str) -> list[dict[str, Any]]:
+    """Backward-compatible helper that returns only the influencer list."""
+    meta = await search_influencers_with_meta(query)
+    return meta.get("influencers", [])
 
 async def run_influencer_search(parsed_profile: dict, brand_voice: dict) -> dict[str, Any]:
     """
@@ -160,7 +209,8 @@ async def run_influencer_search(parsed_profile: dict, brand_voice: dict) -> dict
         query = await generate_search_query(parsed_profile, brand_voice)
         
         # Step 2: Search for profiles
-        influencers = await search_influencers(query)
+        search_meta = await search_influencers_with_meta(query)
+        influencers = search_meta.get("influencers", [])
         
         return {
             "status": "success",
@@ -168,6 +218,8 @@ async def run_influencer_search(parsed_profile: dict, brand_voice: dict) -> dict
                 "search_query_used": query,
                 "influencers": influencers,
                 "influencer_count": len(influencers),
+                "search_provider": search_meta.get("provider"),
+                "warning": search_meta.get("warning"),
             },
             "error": None,
         }

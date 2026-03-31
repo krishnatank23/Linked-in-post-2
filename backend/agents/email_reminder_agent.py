@@ -147,27 +147,12 @@ def _build_email_html(
         content = post.get("content", "").replace("\n", "<br>")
         goal = post.get("goal", "")
         
-        # Get image if available
-        image_html = ""
-        generated_image_b64 = post.get("generated_image_base64", "")
-        if generated_image_b64 and generated_image_b64.strip():
-            # Embed base64 image directly
-            image_html = f'<div style="margin: 15px 0; text-align: center;"><img src="data:image/png;base64,{generated_image_b64}" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #ddd;"></div>'
-        else:
-            # Try reference images
-            ref_images = post.get("reference_images", [])
-            if ref_images:
-                img_url = ref_images[0].get("image_url", "")
-                if img_url:
-                    image_html = f'<div style="margin: 15px 0; text-align: center;"><img src="{img_url}" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #ddd;"></div>'
-        
         posts_html += f"""
         <div style="margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e8f4f8 100%); border-left: 4px solid #0077b5; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
             <h3 style="color: #0077b5; margin: 0 0 10px 0;">📌 Post #{idx}: {post_type}</h3>
             <div style="line-height: 1.6; color: #333; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.6); border-radius: 3px;">
                 {content}
             </div>
-            {image_html}
             <p style="margin: 10px 0; color: #666; font-style: italic;">🎯 Goal: {goal}</p>
         </div>
         """

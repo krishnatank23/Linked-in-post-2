@@ -28,6 +28,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agent_outputs = relationship("AgentOutput", back_populates="user", cascade="all, delete-orphan")
+    linkedin_posts = relationship("LinkedInPost", back_populates="user", cascade="all, delete-orphan")
 
 
 class AgentOutput(Base):
@@ -45,3 +46,18 @@ class AgentOutput(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="agent_outputs")
+
+
+class LinkedInPost(Base):
+    __tablename__ = "linkedin_posts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    post_type = Column(String(100), nullable=False)  # e.g. Educational, Storytelling, etc.
+    content = Column(Text, nullable=False)  # The actual post text
+    goal = Column(Text, nullable=True)  # Purpose of the post (bridge gap, etc.)
+    scheduled_for = Column(DateTime, nullable=True)  # When this post is scheduled to be published
+    sent_to_email = Column(Boolean, default=False)  # Whether user was emailed about this post
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="linkedin_posts")

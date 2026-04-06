@@ -736,6 +736,23 @@ function renderGapAnalysisResults(results) {
     const container = $('#gap-analysis-results');
     container.innerHTML = '';
 
+    const getPriorityForAction = (index, total) => {
+        if (total <= 2) return index === 0 ? 'High' : 'Medium';
+        if (index < 2) return 'High';
+        if (index < 4) return 'Medium';
+        return 'Low';
+    };
+
+    const getPriorityStyle = (priority) => {
+        if (priority === 'High') {
+            return 'background: rgba(239, 68, 68, 0.2); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.45);';
+        }
+        if (priority === 'Medium') {
+            return 'background: rgba(251, 191, 36, 0.2); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.45);';
+        }
+        return 'background: rgba(34, 197, 94, 0.2); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.45);';
+    };
+
     results.forEach(result => {
         if (result.agent_name.includes('Gap Analysis')) {
             const output = result.output || {};
@@ -792,14 +809,20 @@ function renderGapAnalysisResults(results) {
                     </div>
 
                     <div class="output-section">
-                        <div class="output-section-title">🚀 Immediate Action Plan</div>
+                        <div class="output-section-title">🚀 Overall Improvements</div>
                         <div class="action-plan-list">
-                            ${actions.map((act, i) => `
+                            ${actions.map((act, i) => {
+                                const priority = getPriorityForAction(i, actions.length);
+                                return `
                                 <div class="action-item">
                                     <div class="step-icon" style="background: var(--accent-emerald); width: 24px; height: 24px; font-size: 10px;">${i+1}</div>
-                                    <span>${escapeHtml(act)}</span>
+                                    <span style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;">
+                                        <span>${escapeHtml(act)}</span>
+                                        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.02em; border-radius: 999px; padding: 2px 8px; ${getPriorityStyle(priority)}">${priority}</span>
+                                    </span>
                                 </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 </div>

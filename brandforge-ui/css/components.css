@@ -1,0 +1,154 @@
+/* ═══════════════════════════════════════════════════════════════
+   BrandForge AI — UI Components
+   Focus: Buttons, Inputs, Cards, Dropzones, Toasts
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Buttons ─── */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.75rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition-base);
+    border: 1px solid transparent;
+}
+
+.btn-sm { padding: 0.5rem 1.25rem; font-size: 0.875rem; }
+.btn-lg { padding: 1.25rem 2.5rem; font-size: 1.125rem; }
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--clr-primary), var(--clr-accent));
+    color: white;
+    box-shadow: 0 4px 20px var(--clr-primary-glow);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px var(--clr-primary-glow);
+    filter: brightness(1.1);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--clr-text-main);
+    border-color: var(--glass-border);
+}
+
+.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Form Inputs ─── */
+.form-group {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--clr-text-muted);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+    width: 100%;
+    padding: 0.875rem 1.25rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    color: var(--clr-text-main);
+    font-family: inherit;
+    transition: var(--transition-base);
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--clr-primary);
+    background: rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 4px var(--clr-primary-glow);
+}
+
+/* ─── Dropzone ─── */
+.dropzone {
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-base);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.dropzone:hover, .dropzone.active {
+    border-color: var(--clr-accent);
+    background: rgba(6, 182, 212, 0.05);
+}
+
+.dropzone-text {
+    color: var(--clr-text-muted);
+    font-size: 0.875rem;
+}
+
+/* ─── Common Text Styles ─── */
+.text-accent { color: var(--clr-accent); }
+.text-muted { color: var(--clr-text-muted); }
+.text-dim { color: var(--clr-text-dim); }
+
+/* ─── Cards & Grids ─── */
+.agent-card {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* ─── Specialized Renderers ─── */
+.render-resume table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.render-resume th, .render-resume td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.text-success { color: var(--clr-success); }
+.text-error { color: var(--clr-error); }
+
+.bg-primary\/20 { background: rgba(99, 102, 241, 0.2); }
+.border-accent\/30 { border-color: rgba(6, 182, 212, 0.3); }
+
+.mask-fade {
+    -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--clr-primary);
+    border-radius: 4px;
+}
+
+/* ─── Utility classes used in renderers ─── */
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-1 > * + * { margin-top: 0.25rem; }
+
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tracking-widest { letter-spacing: 0.1em; }
+.leading-relaxed { line-height: 1.625; }

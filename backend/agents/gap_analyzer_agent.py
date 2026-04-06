@@ -4,10 +4,10 @@ import traceback
 from typing import Any
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from dotenv import load_dotenv
+from env_config import load_backend_env
 from agents.groq_guard import guarded_groq_ainvoke
 
-load_dotenv()
+load_backend_env()
 
 GAP_ANALYSIS_PROMPT = """You are a senior personal branding strategist and LinkedIn content expert.
 Your goal is to analyze the "gap" between a user and their industry "idol" (influencer) and provide a concrete content strategy to bridge that gap.

@@ -5,12 +5,12 @@ from PyPDF2 import PdfReader
 from docx import Document
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from dotenv import load_dotenv
+from env_config import load_backend_env
 
 import asyncio
 import json
 from agents.groq_guard import guarded_groq_ainvoke
-load_dotenv()
+load_backend_env()
 
 RESUME_PARSER_PROMPT = """You are an expert resume and LinkedIn profile analyzer. 
 Your job is to extract ALL structured information from the given resume/profile text.

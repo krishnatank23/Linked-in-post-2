@@ -77,6 +77,11 @@ class SendReminderRequest(BaseModel):
     posts_data: dict
 
 
+class SendPostEmailRequest(BaseModel):
+    user_id: int
+    posts_data: dict
+
+
 # ─── Save Result Schemas ───
 class SaveResultRequest(BaseModel):
     user_id: int

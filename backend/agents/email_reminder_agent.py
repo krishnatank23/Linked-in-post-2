@@ -2,37 +2,24 @@ import os
 import smtplib
 import base64
 import traceback
+import requests
+from dotenv import dotenv_values
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email import encoders
 from typing import Any
-from dotenv import load_dotenv
+from env_config import load_backend_env
 
-load_dotenv()
+load_backend_env()
 
 FUNNY_REMINDER_MESSAGES = [
-    "Post on LinkedIn today, please. 🚀",
-    "Your audience awaits your post today. 🎯",
-    "Share your LinkedIn post right now. ⚡",
-    "Publish your LinkedIn update today, please. 💼",
-    "Your next post needs daylight today. 🌞",
-    "Post now and grow your network. 📈",
-    "Don't delay your LinkedIn post today. ⏰",
-    "Your content deserves to be seen. 👀",
-    "Go post before your momentum fades. 🔥",
-    "Hit publish on LinkedIn right now. ✅",
-    "Your followers are waiting for you. 🤝",
-    "Post once and stay top-of-mind. 🧠",
-    "Time to post on LinkedIn today. 🕒",
-    "Ship your post and spark conversations. 💬",
-    "Small post, big professional impact today. 🌟",
-    "Post today and thank yourself tomorrow. 🙌",
-    "Ready content here, just press publish. 📲",
-    "LinkedIn reminder: post it right now. 📣",
-    "Stay consistent and share your post. 🔁",
-    "One post today boosts your visibility. ✨",
+    "Your LinkedIn posts are ready for review.",
+    "The content generated for your profile is attached.",
+    "LinkedIn strategy update: new posts generated.",
+    "Your weekly LinkedIn content plan.",
+    "Review your scheduled LinkedIn posts.",
 ]
 
 def _get_funny_reminder() -> str:
@@ -46,7 +33,7 @@ def _send_email_smtp(
     subject: str,
     html_body: str,
     attachments: list[tuple[str, bytes, str]] = None
-) -> bool:
+) -> tuple[bool, str | None]:
     """
     Send email via Outlook/Office365 SMTP.
     
@@ -66,17 +53,41 @@ def _send_email_smtp(
         attachments: List of (filename, file_bytes, mime_type) tuples
     
     Returns:
-        True if sent successfully, False otherwise
+        (True, None) on success, (False, reason) on failure
     """
     try:
+        # Always reload latest backend/.env so runtime updates are picked without full process restart.
+        load_backend_env()
+
+        def _clean_env_value(raw: str | None) -> str:
+            value = (raw or "").strip()
+            if len(value) >= 2 and ((value[0] == "'" and value[-1] == "'") or (value[0] == '"' and value[-1] == '"')):
+                value = value[1:-1].strip()
+            return value
+
         # Load SERVICE ACCOUNT credentials from .env (admin/noreply account that sends emails)
-        sender_email = os.getenv("EMAIL_SENDER", "").strip()
-        sender_password = os.getenv("EMAIL_PASSWORD", "").strip()
-        smtp_server = os.getenv("EMAIL_SMTP_SERVER", "smtp.office365.com").strip()
-        smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+        sender_email = _clean_env_value(os.getenv("EMAIL_SENDER"))
+        sender_password = _clean_env_value(os.getenv("EMAIL_PASSWORD"))
+        smtp_server = _clean_env_value(os.getenv("EMAIL_SMTP_SERVER")) or "smtp.office365.com"
+        smtp_port_raw = _clean_env_value(os.getenv("EMAIL_SMTP_PORT")) or "587"
+
+        # Fallback read in case process env is stale for any reason.
+        if not sender_email or not sender_password:
+            backend_dir = os.path.dirname(os.path.dirname(__file__))
+            env_path = os.path.join(backend_dir, ".env")
+            env_vals = dotenv_values(env_path)
+            sender_email = sender_email or _clean_env_value(env_vals.get("EMAIL_SENDER"))
+            sender_password = sender_password or _clean_env_value(env_vals.get("EMAIL_PASSWORD"))
+            smtp_server = _clean_env_value(env_vals.get("EMAIL_SMTP_SERVER")) or smtp_server
+            smtp_port_raw = _clean_env_value(env_vals.get("EMAIL_SMTP_PORT")) or smtp_port_raw
+
+        try:
+            smtp_port = int(smtp_port_raw)
+        except Exception:
+            smtp_port = 587
         
         if not sender_email or not sender_password:
-            return False
+            return False, "EMAIL_SENDER or EMAIL_PASSWORD is missing in backend/.env"
         
         # Create message
         message = MIMEMultipart("alternative")
@@ -113,10 +124,101 @@ def _send_email_smtp(
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, recipient_email, message.as_string())
         
-        return True
+        return True, None
     except Exception as e:
-        print(f"Email sending error: {str(e)}")
-        return False
+        error_text = str(e).strip() or "Unknown SMTP error"
+        if "5.7.139" in error_text or "SmtpClientAuthentication is disabled" in error_text:
+            error_text = (
+                "Outlook SMTP AUTH is disabled for this Microsoft 365 tenant/mailbox. "
+                "Enable Authenticated SMTP for the tenant and this mailbox, then retry."
+            )
+        print(f"Email sending error: {error_text}")
+        return False, error_text
+
+
+def _send_email_graph_app_only(
+    recipient_email: str,
+    subject: str,
+    html_body: str,
+) -> tuple[bool, str | None]:
+    """Send email using Microsoft Graph with app-only (client credentials) auth."""
+    try:
+        load_backend_env()
+
+        def _clean_env_value(raw: str | None) -> str:
+            value = (raw or "").strip()
+            if len(value) >= 2 and ((value[0] == "'" and value[-1] == "'") or (value[0] == '"' and value[-1] == '"')):
+                value = value[1:-1].strip()
+            return value
+
+        tenant_id = _clean_env_value(os.getenv("GRAPH_TENANT_ID"))
+        client_id = _clean_env_value(os.getenv("GRAPH_CLIENT_ID"))
+        client_secret = _clean_env_value(os.getenv("GRAPH_CLIENT_SECRET"))
+        sender = _clean_env_value(os.getenv("GRAPH_SENDER_EMAIL")) or _clean_env_value(os.getenv("EMAIL_SENDER"))
+
+        if not tenant_id or not client_id or not client_secret or not sender:
+            return False, (
+                "Microsoft Graph app credentials missing. Set GRAPH_TENANT_ID, GRAPH_CLIENT_ID, "
+                "GRAPH_CLIENT_SECRET, and GRAPH_SENDER_EMAIL (or EMAIL_SENDER)."
+            )
+
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        token_payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "https://graph.microsoft.com/.default",
+            "grant_type": "client_credentials",
+        }
+
+        token_resp = requests.post(token_url, data=token_payload, timeout=20)
+        if token_resp.status_code >= 400:
+            return False, f"Graph token request failed: {token_resp.status_code} {token_resp.text[:300]}"
+
+        access_token = token_resp.json().get("access_token")
+        if not access_token:
+            return False, "Graph token response did not include access_token"
+
+        send_url = f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail"
+        payload = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "HTML",
+                    "content": html_body,
+                },
+                "toRecipients": [
+                    {
+                        "emailAddress": {
+                            "address": recipient_email,
+                        }
+                    }
+                ],
+            },
+            "saveToSentItems": "true",
+        }
+
+        send_resp = requests.post(
+            send_url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+
+        if send_resp.status_code >= 400:
+            message = send_resp.text[:400]
+            if "Access is denied" in message or "Insufficient privileges" in message:
+                return False, (
+                    "Graph sendMail permission missing. Grant admin consent for Mail.Send (Application) "
+                    f"and ensure sender mailbox exists. Graph response: {send_resp.status_code} {message}"
+                )
+            return False, f"Graph sendMail failed: {send_resp.status_code} {message}"
+
+        return True, None
+    except Exception as e:
+        return False, f"Graph email error: {str(e)}"
 
 
 def _build_email_html(
@@ -124,23 +226,6 @@ def _build_email_html(
     reminder_msg: str
 ) -> str:
     """Build HTML email content with posts and images."""
-    import random
-    
-    # Short nudges below the main reminder
-    fun_facts = [
-        "Consistency wins when you post regularly. 🔁",
-        "Your voice matters, post today please. 🎤",
-        "Visibility grows when you publish consistently. 📈",
-        "Show up and share insights today. 💡",
-        "Strong careers need visible LinkedIn posts. 💼",
-        "Momentum starts with one simple post. ⚡",
-        "Keep posting and keep growing daily. 🌱",
-        "Your network needs your perspective today. 👥",
-        "Publish now and engage faster today. 💬",
-    ]
-    
-    fun_fact = random.choice(fun_facts)
-    
     posts_html = ""
     for idx, post in enumerate(posts, 1):
         post_type = post.get("type", "Post")
@@ -148,12 +233,12 @@ def _build_email_html(
         goal = post.get("goal", "")
         
         posts_html += f"""
-        <div style="margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e8f4f8 100%); border-left: 4px solid #0077b5; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <h3 style="color: #0077b5; margin: 0 0 10px 0;">📌 Post #{idx}: {post_type}</h3>
-            <div style="line-height: 1.6; color: #333; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.6); border-radius: 3px;">
+        <div class="post-box">
+            <h3 class="post-title">Post #{idx}: {post_type}</h3>
+            <div style="line-height: 1.6; color: #333;">
                 {content}
             </div>
-            <p style="margin: 10px 0; color: #666; font-style: italic;">🎯 Goal: {goal}</p>
+            <p style="margin-top: 10px; color: #666; font-size: 13px;">Goal: {goal}</p>
         </div>
         """
     
@@ -161,68 +246,28 @@ def _build_email_html(
     <html>
     <head>
         <style>
-            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f5f5f5 0%, #e8f4f8 100%); margin: 0; padding: 20px; }}
-            .container {{ max-width: 650px; margin: 0 auto; background: white; padding: 35px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,119,181,0.1); border-top: 4px solid #0077b5; }}
-            .header {{ text-align: center; margin-bottom: 35px; }}
-            .header h1 {{ color: #0077b5; margin: 0; font-size: 32px; letter-spacing: -0.5px; }}
-            .header-subtitle {{ color: #666; margin: 8px 0 0 0; font-size: 16px; font-style: italic; }}
-            .header-emoji {{ font-size: 40px; margin-bottom: 15px; }}
-            .reminder {{ background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%); padding: 18px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107; box-shadow: 0 2px 8px rgba(255,193,7,0.2); }}
-            .reminder p {{ color: #333; margin: 0; font-weight: 500; font-size: 16px; line-height: 1.5; }}
-            .fun-fact {{ background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%); padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #5dade2; color: #333; font-size: 14px; line-height: 1.6; }}
-            .fun-fact p {{ margin: 0; }}
-            .posts {{ margin: 25px 0; }}
-            .posts-title {{ color: #0077b5; font-size: 18px; font-weight: 600; margin: 20px 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #e8f4f8; }}
-            .cta-button {{ text-align: center; margin: 30px 0; }}
-            .cta-button a {{ display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #0077b5 0%, #005a87 100%); color: white; text-decoration: none; border-radius: 6px; font-weight: 600; transition: transform 0.2s; box-shadow: 0 2px 8px rgba(0,119,181,0.3); }}
-            .cta-button a:hover {{ transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,119,181,0.4); }}
-            .mystery-divider {{ text-align: center; color: #999; margin: 20px 0; font-size: 12px; letter-spacing: 2px; }}
-            .footer {{ text-align: center; margin-top: 35px; padding-top: 25px; border-top: 1px solid #ddd; color: #999; font-size: 11px; line-height: 1.8; }}
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 4px; border: 1px solid #ddd; }}
+            .header {{ padding-bottom: 20px; border-bottom: 2px solid #0077b5; }}
+            .header h1 {{ color: #333; margin: 0; font-size: 24px; }}
+            .posts {{ margin-top: 20px; }}
+            .post-box {{ margin-bottom: 20px; padding: 15px; background: #fafafa; border: 1px solid #eee; }}
+            .post-title {{ color: #0077b5; margin-top: 0; }}
+            .footer {{ margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; font-size: 12px; color: #777; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="header-emoji">🚀✨🎯</div>
-                <h1>🎯 LinkedIn Post Reminder</h1>
-                <p class="header-subtitle">"Your content awaits its destiny..."</p>
-            </div>
-            
-            <div class="mystery-divider">✦ ✦ ✦</div>
-            
-            <div class="reminder">
-                <p>💬 {reminder_msg}</p>
-            </div>
-            
-            <div class="fun-fact">
-                <p>{fun_fact}</p>
+                <h1>LinkedIn Content Ready</h1>
             </div>
             
             <div class="posts">
-                <h2 class="posts-title">🎪 Your Generated Posts:</h2>
                 {posts_html}
             </div>
             
-            <div class="mystery-divider">✦ ✦ ✦</div>
-            
-            <div class="cta-button">
-                <a href="https://www.linkedin.com" target="_blank">🚀 PUBLISH TO LINKEDIN NOW 🚀</a>
-            </div>
-            
-            <div style="background: #f0f8ff; padding: 15px; border-radius: 6px; margin: 20px 0; text-align: center; color: #555; font-size: 13px;">
-                <p style="margin: 0 0 8px 0;"><strong>💡 Pro Tip:</strong> The best time to post is when your audience is most active!</p>
-                <p style="margin: 0;"><strong>⚡ Bonus Tip:</strong> Engage with comments within the first hour = algorithm magic! 🎩✨</p>
-            </div>
-            
             <div class="footer">
-                <p>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
-                <p><strong>BrandForge AI</strong> - Your Personal LinkedIn Content Studio</p>
-                <p>Transforming Profiles into Powerhouses 💪 | One Post at a Time 📝</p>
-                <p>© 2026 All rights reserved. Keep crushing it! 🔥</p>
-                <p>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
-                <p style="margin-top: 10px; font-size: 10px; color: #bbb;">
-                    <em>This email was generated by AI, but the strategy is all YOU.</em>
-                </p>
+                Automated Personal Branding Assistant
             </div>
         </div>
     </body>
@@ -278,12 +323,19 @@ async def run_email_reminder(
         # Build HTML email
         html_body = _build_email_html(posts, reminder_msg)
         
-        # Send email
-        success = _send_email_smtp(
+        # Prefer Microsoft Graph app-only (no mailbox password). Fall back to SMTP if Graph isn't configured.
+        success, send_error = _send_email_graph_app_only(
             recipient_email=user_email,
-            subject="🚀 Your LinkedIn Posts Are Ready! [BrandForge AI]",
+            subject="Your LinkedIn Posts Are Ready [BrandForge AI]",
             html_body=html_body,
         )
+
+        if not success and "Microsoft Graph app credentials missing" in (send_error or ""):
+            success, send_error = _send_email_smtp(
+                recipient_email=user_email,
+                subject="Your LinkedIn Posts Are Ready [BrandForge AI]",
+                html_body=html_body,
+            )
         
         if not success:
             return {
@@ -291,9 +343,9 @@ async def run_email_reminder(
                 "output": {
                     "posts_count": len(posts),
                     "email_sent": False,
-                    "message": "Service account credentials not configured. Admin must set EMAIL_SENDER and EMAIL_PASSWORD in .env",
+                    "message": f"Email delivery failed: {send_error}",
                 },
-                "error": "SERVICE ACCOUNT: EMAIL_SENDER or EMAIL_PASSWORD not configured in .env (admin config, not user)",
+                "error": f"Email delivery failed: {send_error}",
             }
         
         return {

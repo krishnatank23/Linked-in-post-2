@@ -22,7 +22,7 @@ async def test_endpoints():
                 data.add_field('resume', f, filename='test_resume.pdf')
                 
                 try:
-                    async with session.post('http://localhost:8000/api/register', data=data) as resp:
+                    async with session.post('http://localhost:8010/api/register', data=data) as resp:
                         body = await resp.text()
                         print(f"Status: {resp.status}")
                         print(f"Response: {body[:200]}")
@@ -45,7 +45,7 @@ async def test_endpoints():
                 "password": "testpass123"
             }
             async with session.post(
-                'http://localhost:8000/api/login',
+                'http://localhost:8010/api/login',
                 headers={'Content-Type': 'application/json'},
                 json=login_data
             ) as resp:

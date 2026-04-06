@@ -6,7 +6,7 @@ from sqlalchemy import select
 from passlib.context import CryptContext
 import jwt
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from env_config import load_backend_env
 
 from database import get_db
 from models import User
@@ -17,7 +17,7 @@ try:
 except Exception:
     bcrypt_lib = None
 
-load_dotenv()
+load_backend_env()
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -29,6 +29,10 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
 
 
 def create_access_token(data: dict) -> str:
@@ -83,13 +87,23 @@ async def register(
     resume: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
+    email = _normalize_email(email)
+    username = (username or "").strip()
+
     if not password:
         raise HTTPException(status_code=400, detail="Password cannot be empty")
     # Check existing user
     try:
-        result = await db.execute(select(User).where((User.email == email) | (User.username == username)))
-        if result.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="User with this email or username already exists")
+        existing_email_result = await db.execute(select(User).where(User.email == email))
+        existing_email_user = existing_email_result.scalar_one_or_none()
+
+        existing_username_user = None
+        if username:
+            existing_username_result = await db.execute(select(User).where(User.username == username))
+            existing_username_user = existing_username_result.scalar_one_or_none()
+
+        if existing_username_user and existing_email_user is None and existing_username_user.email != email:
+            raise HTTPException(status_code=400, detail="Username already exists. Choose a different username.")
 
         # Save resume file
         file_ext = os.path.splitext(resume.filename)[1].lower()
@@ -104,22 +118,31 @@ async def register(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(resume.file, buffer)
 
-        # Create user
+        # Create new user or update the existing account for this email.
         hashed_pw = pwd_context.hash(password)
-        new_user = User(
-            email=email,
-            username=username,
-            hashed_password=hashed_pw,
-            resume_path=file_path,
-            resume_filename=resume.filename,
-            unique_id=unique_id,
-        )
-        db.add(new_user)
+
+        if existing_email_user:
+            existing_email_user.username = username or existing_email_user.username
+            existing_email_user.hashed_password = hashed_pw
+            existing_email_user.resume_path = file_path
+            existing_email_user.resume_filename = resume.filename
+            new_user = existing_email_user
+        else:
+            new_user = User(
+                email=email,
+                username=username,
+                hashed_password=hashed_pw,
+                resume_path=file_path,
+                resume_filename=resume.filename,
+                unique_id=unique_id,
+            )
+            db.add(new_user)
+
         await db.commit()
         await db.refresh(new_user)
 
         return RegisterResponse(
-            message="Registration successful",
+            message="Registration successful" if not existing_email_user else "Account updated successfully",
             user_id=new_user.id,
             unique_id=new_user.unique_id,
             username=new_user.username,
@@ -135,18 +158,19 @@ async def register(
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == request.email))
+    email = _normalize_email(request.email)
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     
     if not request.password:
         raise HTTPException(status_code=400, detail="Password cannot be empty")
 
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=404, detail="No account found for this email. Please sign up first.")
 
     is_valid = await verify_password_and_migrate(request.password, user, db)
     if not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid password")
 
     token = create_access_token({"sub": str(user.id), "email": user.email})
 

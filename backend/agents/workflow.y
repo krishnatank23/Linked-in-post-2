@@ -372,19 +372,13 @@ def build_pipeline() -> StateGraph:
 
     # Add nodes
     workflow.add_node("resume_parser", resume_parser_node)
-def build_pipeline() -> StateGraph:
-    """Build the LangGraph pipeline with first 3 agents only."""
-    workflow = StateGraph(PipelineState)
-
-    # Add nodes
-    workflow.add_node("resume_parser", resume_parser_node)
-    workflow.add_node("brand_voice_node", brand_voice_node)  # ✅ FIXED
+    workflow.add_node("brand_voice_node", brand_voice_node)
     workflow.add_node("influence_scout", influence_scout_node)
 
-    # Define edges
+    # Define edges: resume_parser → brand_voice → influence_scout → END
     workflow.set_entry_point("resume_parser")
-    workflow.add_edge("resume_parser", "brand_voice_node")   # ✅ MATCHED
-    workflow.add_edge("brand_voice_node", "influence_scout") # ✅ MATCHED
+    workflow.add_edge("resume_parser", "brand_voice_node")
+    workflow.add_edge("brand_voice_node", "influence_scout")
     workflow.add_edge("influence_scout", END)
 
     return workflow.compile()

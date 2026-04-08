@@ -1,0 +1,449 @@
+INFO:     Started server process [14340]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:56546 - "POST /login HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:36108 - "POST /register HTTP/1.0" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [14340]
+INFO:     Started server process [20610]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:39914 - "POST /api/login HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:40534 - "POST /api/login HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:54806 - "POST /api/register HTTP/1.0" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20610]
+INFO:     Started server process [20677]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [20685]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:32820 - "POST /api/login HTTP/1.1" 404 Not Found
+INFO:     110.227.210.149:53240 - "GET /docs HTTP/1.1" 200 OK
+INFO:     110.227.210.149:53240 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20677]
+INFO:     Started server process [20731]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     110.227.210.149:58517 - "GET /docs HTTP/1.1" 200 OK
+INFO:     110.227.210.149:58517 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52596 - "POST /api/register HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+INFO:     127.0.0.1:52598 - "POST /api/login HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52604 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49674 - "POST /api/pipeline/run HTTP/1.0" 400 Bad Request
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20731]
+INFO:     Started server process [20765]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:36186 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     127.0.0.1:53196 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:53204 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34520 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34526 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34528 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34544 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34556 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:60124 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:60136 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:40038 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:33720 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     127.0.0.1:46722 - "POST /api/login HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46728 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:46734 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     127.0.0.1:45440 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45442 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20765]
+INFO:     Started server process [20784]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:34862 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:55854 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     127.0.0.1:57788 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:57798 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20784]
+INFO:     Started server process [20809]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:51792 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51732 - "POST /api/login HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51734 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+[PIPELINE ERROR] Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+INFO:     127.0.0.1:51740 - "POST /api/pipeline/run HTTP/1.0" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20809]
+INFO:     Started server process [20820]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+WARNING:  Invalid HTTP request received.
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     195.184.76.144:35171 - "GET / HTTP/1.1" 404 Not Found
+INFO:     91.230.168.243:39603 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20820]
+INFO:     Started server process [20839]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[SCHEDULER] Scheduler started. Daily post generation check runs at 11:00 AM UTC.
+INFO:     127.0.0.1:36188 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+INFO:     127.0.0.1:36212 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/brand_voice_agent.py:72: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+INFO:     127.0.0.1:44342 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44354 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44360 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44376 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44382 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44386 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44768 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44772 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44788 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44802 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/influencer_agent.py:151: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+Serper rejected query variant (site:linkedin.com/in/ Top Data Science and Machine Learning ...). Trying fallback variant.
+INFO:     127.0.0.1:44804 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:254: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:257: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+[PIPELINE] Pipeline completed with 3 results
+INFO:     127.0.0.1:36202 - "POST /api/pipeline/run HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49512 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49522 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49538 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49546 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49550 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49562 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41970 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41982 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59158 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+INFO:     127.0.0.1:44092 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/brand_voice_agent.py:72: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+INFO:     127.0.0.1:44102 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44112 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44116 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:44118 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48084 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48086 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48096 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48100 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48106 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48122 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/influencer_agent.py:151: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+Serper rejected query variant (site:linkedin.com/in/ Top Data Science and Machine Learning ...). Trying fallback variant.
+INFO:     127.0.0.1:48132 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:254: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:257: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+[PIPELINE] Pipeline completed with 3 results
+INFO:     127.0.0.1:44084 - "POST /api/pipeline/run HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36798 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36814 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36828 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36838 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36850 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36852 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45102 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48268 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+INFO:     127.0.0.1:42404 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/brand_voice_agent.py:72: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+INFO:     127.0.0.1:42416 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42432 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42434 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42440 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42448 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42456 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35008 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35012 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35024 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35038 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/influencer_agent.py:151: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+Serper rejected query variant (site:linkedin.com/in/ Top Data Science and Machine Learning ...). Trying fallback variant.
+INFO:     127.0.0.1:35052 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:254: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:257: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+[PIPELINE] Pipeline completed with 3 results
+INFO:     127.0.0.1:39214 - "POST /api/pipeline/run HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56174 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56180 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56186 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56198 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56202 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:56218 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42348 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51184 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51198 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:43306 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:34536 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+[PIPELINE] Starting pipeline for user 5 with resume: /home/ubuntu/Linked-in-post-2/backend/routes/uploads/3cee43bf-430e-46e9-8c6a-158e1615d482.pdf
+INFO:     127.0.0.1:34552 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/brand_voice_agent.py:72: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+INFO:     127.0.0.1:34566 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49292 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49304 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49320 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49326 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49334 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49348 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49362 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:60456 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:60462 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/backend/agents/influencer_agent.py:151: RuntimeWarning: This package (`duckduckgo_search`) has been renamed to `ddgs`! Use `pip install ddgs` instead.
+  with DDGS() as ddgs:
+Serper rejected query variant (site:linkedin.com/in/ Top Data Science and AI/ML Engineering...). Trying fallback variant.
+INFO:     127.0.0.1:60464 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:254: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py:257: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  user.cache_updated_at = datetime.utcnow()
+[PIPELINE] Pipeline completed with 3 results
+INFO:     127.0.0.1:34544 - "POST /api/pipeline/run HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42574 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42586 - "GET /api/pipeline/results/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42598 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42608 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42622 - "GET /api/pipeline/live-status/5 HTTP/1.0" 200 OK
+INFO:     146.190.240.72:51428 - "GET / HTTP/1.1" 404 Not Found
+INFO:     146.190.240.72:51442 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.

@@ -64,3 +64,136 @@ Traceback (most recent call last):
 UnboundLocalError: cannot access local variable 'json' where it is not associated with a value
 During task with name 'resume_parser' and id '321c1f92-f4cf-bed8-d8cf-797a1c13a65d'
 
+
+--- ERROR at 2026-04-07 13:03:07.469606 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:03:43.148989 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:05:14.374455 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:05:40.590176 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:20:56.501757 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:21:04.810716 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+
+
+--- ERROR at 2026-04-07 13:24:57.238438 ---
+Error in pipeline: 'brand_voice' is already being used as a state key
+Traceback (most recent call last):
+  File "/home/ubuntu/Linked-in-post-2/backend/routes/pipeline.py", line 225, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 389, in run_pipeline
+    pipeline = build_pipeline()
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Linked-in-post-2/backend/agents/workflow.py", line 375, in build_pipeline
+    workflow.add_node("brand_voice", brand_voice_node)
+  File "/home/ubuntu/Linked-in-post-2/venv/lib/python3.12/site-packages/langgraph/graph/state.py", line 361, in add_node
+    raise ValueError(f"'{node}' is already being used as a state key")
+ValueError: 'brand_voice' is already being used as a state key
+

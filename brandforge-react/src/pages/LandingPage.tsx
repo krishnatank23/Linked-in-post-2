@@ -71,7 +71,7 @@ export default function LandingPage() {
               Production-level React frontend, built for a separate dev server
             </div>
             <h1 className="font-heading text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.02]">
-              Build your LinkedIn brand with an <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">AI studio</span>.
+              Build your LinkedIn brand with LinkSync AI <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">AI studio</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg md:text-xl text-white/65 leading-8">
               Upload a resume, run the pipeline, select influencer benchmarks, review gap analysis, and generate trend-aware posts from one elegant workspace.
@@ -189,7 +189,7 @@ export default function LandingPage() {
             <div>
               <div className="text-sm uppercase tracking-[0.3em] text-white/35 mb-3">Ready to start</div>
               <h2 className="font-heading text-3xl md:text-5xl font-bold leading-tight">
-                Launch the separate React frontend with the FastAPI backend.
+                Transform your expertise into a magnetic LinkedIn presence.
               </h2>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">

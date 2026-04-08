@@ -289,6 +289,7 @@ export default function WorkflowReviewPage() {
 
                     <div className={`${glassCard} p-5 md:p-6`}>
                       <div className="text-xs uppercase tracking-[0.2em] text-white/35 mb-2">Post Generation</div>
+                      <p className="text-white/80 text-sm leading-7 mb-2">Beyond templates, Strategic LinkedIn growth powered by autonomous agent workflows..</p>
                       <p className="text-white/55 text-sm leading-7 mb-4">
                         This section shows the latest post-generation output if available.
                       </p>

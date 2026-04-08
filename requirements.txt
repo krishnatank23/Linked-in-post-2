@@ -2,11 +2,14 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 aiosqlite
+aiohttp
+apscheduler
 python-multipart
 PyJWT
 passlib
 bcrypt
 pydantic>=2.7,<3.0
+email-validator
 langchain>=0.3.0,<0.4.0
 langchain-core>=0.3.0,<0.4.0
 langchain-groq>=0.2.0,<0.4.0
@@ -17,3 +20,4 @@ PyPDF2
 python-docx
 duckduckgo-search
 python-dotenv
+requests

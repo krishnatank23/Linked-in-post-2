@@ -6,6 +6,7 @@ from docx import Document
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
+from path_resolver import resolve_resume_path
 
 import asyncio
 import json
@@ -103,11 +104,12 @@ def extract_text_from_docx(file_path: str) -> str:
 
 def extract_resume_text(file_path: str) -> str:
     """Extract text from resume file based on extension."""
-    ext = os.path.splitext(file_path)[1].lower()
+    resolved_path = resolve_resume_path(file_path)
+    ext = os.path.splitext(resolved_path)[1].lower()
     if ext == ".pdf":
-        return extract_text_from_pdf(file_path)
+        return extract_text_from_pdf(resolved_path)
     elif ext in [".docx", ".doc"]:
-        return extract_text_from_docx(file_path)
+        return extract_text_from_docx(resolved_path)
     else:
         raise ValueError(f"Unsupported file format: {ext}")
 

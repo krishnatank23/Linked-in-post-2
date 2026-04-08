@@ -16,6 +16,7 @@ from agents.email_reminder_agent import run_email_reminder
 from agents.groq_guard import set_current_user_context
 from agents.runtime_status import get_status, clear_status
 from env_config import load_backend_env
+from path_resolver import resolve_resume_path, to_portable_resume_path
 
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
@@ -208,6 +209,23 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
     if not user.resume_path:
         raise HTTPException(status_code=400, detail="No resume uploaded for this user")
 
+    try:
+        resolved_resume_path = resolve_resume_path(user.resume_path)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Resume file not found on this server. Please re-upload your resume from the UI "
+                f"and run the pipeline again. Details: {str(e)}"
+            ),
+        )
+
+    # One-time migration: normalize persisted path to a portable relative path.
+    portable_resume_path = to_portable_resume_path(resolved_resume_path)
+    if user.resume_path != portable_resume_path:
+        user.resume_path = portable_resume_path
+        await db.commit()
+
     # Clear previous agent outputs for this user
     prev_outputs = await db.execute(select(AgentOutput).where(AgentOutput.user_id == user.id))
     for output in prev_outputs.scalars().all():
@@ -216,13 +234,13 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
 
     # Run the LangGraph pipeline with timeout protection
     try:
-        print(f"[PIPELINE] Starting pipeline for user {request.user_id} with resume: {user.resume_path}")
+        print(f"[PIPELINE] Starting pipeline for user {request.user_id} with resume: {resolved_resume_path}")
         set_current_user_context(user.id)
         clear_status(user.id)
         
         # Timeout guard for end-to-end pipeline execution.
         try:
-            agent_results = await asyncio.wait_for(run_pipeline(user.resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+            agent_results = await asyncio.wait_for(run_pipeline(resolved_resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             error_msg = f"Pipeline execution timed out after {PIPELINE_TIMEOUT_SECONDS} seconds. The LLM service may be slow or unavailable."
             print(f"[PIPELINE ERROR] {error_msg}")

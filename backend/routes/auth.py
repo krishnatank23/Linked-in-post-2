@@ -11,6 +11,7 @@ from env_config import load_backend_env
 from database import get_db
 from models import User
 from schemas import LoginRequest, LoginResponse, RegisterResponse, UserInfo
+from path_resolver import to_portable_resume_path
 
 try:
     import bcrypt as bcrypt_lib
@@ -118,13 +119,15 @@ async def register(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(resume.file, buffer)
 
+        portable_resume_path = to_portable_resume_path(file_path)
+
         # Create new user or update the existing account for this email.
         hashed_pw = pwd_context.hash(password)
 
         if existing_email_user:
             existing_email_user.username = username or existing_email_user.username
             existing_email_user.hashed_password = hashed_pw
-            existing_email_user.resume_path = file_path
+            existing_email_user.resume_path = portable_resume_path
             existing_email_user.resume_filename = resume.filename
             new_user = existing_email_user
         else:
@@ -132,7 +135,7 @@ async def register(
                 email=email,
                 username=username,
                 hashed_password=hashed_pw,
-                resume_path=file_path,
+                resume_path=portable_resume_path,
                 resume_filename=resume.filename,
                 unique_id=unique_id,
             )

@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+__pycache__/
+*.pyc
+*.db
+backend/routes/uploads/*.pdf
+.venv/
+.env
+__pycache__/
+*.pyc
+.venv/

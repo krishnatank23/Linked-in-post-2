@@ -2,10 +2,10 @@ import os
 import json
 import traceback
 from typing import Any
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
-from agents.groq_guard import guarded_groq_ainvoke
+from agents.llm_guard import guarded_llm_ainvoke
 
 load_backend_env()
 
@@ -88,17 +88,17 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         # Step 1: Search for industry context
         industry_context = await search_industry_context(parsed_profile)
 
-        # Step 2: Use Groq LLM to generate brand voice and persona
-        llm = ChatGroq(
-            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        # Step 2: Use OpenAI LLM to generate brand voice and persona
+        llm = ChatOpenAI(
+            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
             temperature=0.4,
-            api_key=os.getenv("GROQ_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),
         )
 
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
         chain = prompt | llm
 
-        response = await guarded_groq_ainvoke(
+        response = await guarded_llm_ainvoke(
             chain,
             {
                 "profile_data": json.dumps(parsed_profile, indent=2),
@@ -142,8 +142,8 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
                 "status": "error",
                 "output": None,
                 "error": (
-                    "Groq API token limit reached during Brand Voice Agent. "
-                    "Please wait for Groq retry window, or reduce token usage / upgrade plan."
+                    "OpenAI API token limit reached during Brand Voice Agent. "
+                    "Please check your quota or wait for the retry window."
                 ),
             }
         return {

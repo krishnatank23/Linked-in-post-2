@@ -9,27 +9,30 @@ import traceback
 from database import get_db
 from models import User, AgentOutput, LinkedInPost
 from schemas import PipelineRequest, PipelineResponse, AgentResult, GapAnalysisRequest, GapAnalysisResponse, SaveResultRequest, GeneratePostsRequest, SendReminderRequest, SendPostEmailRequest
+from schemas import ScrapeLinkedInPostsRequest
 from agents.workflow import run_pipeline
 from agents.gap_analyzer_agent import run_gap_analysis
 from agents.post_generator_agent import run_post_generation
 from agents.email_reminder_agent import run_email_reminder
-from agents.groq_guard import set_current_user_context
+from agents.linkedin_post_scraper_agent import run_linkedin_post_scraper
+from agents.llm_guard import set_current_user_context
 from agents.runtime_status import get_status, clear_status
 from env_config import load_backend_env
 from path_resolver import resolve_resume_path, to_portable_resume_path
+from scheduling_utils import pick_posting_schedule, normalize_posting_time_utc
 
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
 PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "600"))
 
 
-def _ensure_groq_key() -> None:
+def _ensure_openai_key() -> None:
     load_backend_env()
-    groq_key = str(os.getenv("GROQ_API_KEY") or "").strip()
-    if not groq_key:
+    openai_key = str(os.getenv("OPENAI_API_KEY") or "").strip()
+    if not openai_key:
         raise HTTPException(
             status_code=400,
-            detail="GROQ_API_KEY is missing. Add it to backend/.env, restart the backend, and run the pipeline again.",
+            detail="OPENAI_API_KEY is missing. Add it to backend/.env, restart the backend, and run the pipeline again.",
         )
 
 
@@ -74,10 +77,12 @@ def _build_posting_recommendation(
     influencer_payload: dict,
     post_output: dict | None,
 ) -> dict:
-    """Create a clear posting recommendation summary based on gap + selected influencers."""
+    """Create a posting recommendation based on measured gap severity and benchmark breadth."""
     gap_output = gap_output or {}
     post_output = post_output or {}
     gap_analysis = gap_output.get("overall_gap_analysis") or gap_output.get("gap_analysis") or {}
+    strategy = gap_output.get("overall_content_strategy") or gap_output.get("content_strategy") or {}
+    scores = gap_output.get("overall_gap_scores") or gap_output.get("gap_scores") or {}
 
     if "selected_influencers" in influencer_payload:
         selected_count = len(influencer_payload.get("selected_influencers") or [])
@@ -87,14 +92,24 @@ def _build_posting_recommendation(
     missing_elements = gap_analysis.get("key_missing_elements") or []
     gap_score = len(missing_elements)
 
+    numeric_score = scores.get("overall_gap_score")
+    if isinstance(numeric_score, (int, float)):
+        weighted_gap_score = float(numeric_score)
+    else:
+        weighted_gap_score = float(gap_score)
+
     # Dynamic recommendation by gap depth + benchmark breadth.
     recommended_posts_per_week = 3
-    if gap_score >= 5 or selected_count >= 5:
+    if weighted_gap_score >= 7 or gap_score >= 5 or selected_count >= 5:
         recommended_posts_per_week = 5
-    elif gap_score >= 3 or selected_count >= 3:
+    elif weighted_gap_score >= 4.5 or gap_score >= 3 or selected_count >= 3:
         recommended_posts_per_week = 4
 
-    suggested_days = post_output.get("posting_schedule_days") or []
+    suggested_days = (
+        post_output.get("posting_schedule_days")
+        or strategy.get("recommended_days")
+        or []
+    )
     posting_time = post_output.get("posting_time_utc") or "14:00"
 
     if not suggested_days:
@@ -109,7 +124,6 @@ def _build_posting_recommendation(
 
     recommended_post_types = post_output.get("recommended_post_types") or []
     if not recommended_post_types:
-        strategy = gap_output.get("overall_content_strategy") or gap_output.get("content_strategy") or {}
         schedule = strategy.get("proposed_schedule") or []
         for item in schedule:
             if isinstance(item, dict):
@@ -117,8 +131,10 @@ def _build_posting_recommendation(
                 if post_type and post_type not in recommended_post_types:
                     recommended_post_types.append(post_type)
 
+    recommended_post_types = recommended_post_types or strategy.get("recommended_post_types") or []
+
     rationale = (
-        f"Based on {selected_count} selected influencer(s) and {gap_score} identified gap element(s), "
+        f"Based on {selected_count} selected influencer(s), gap intensity score {weighted_gap_score:.1f}, and {gap_score} identified gap element(s), "
         f"the recommended cadence is {recommended_posts_per_week} posts per week. "
         f"This frequency balances authority-building speed with consistency for your current gap level."
     )
@@ -131,6 +147,8 @@ def _build_posting_recommendation(
         "recommended_post_types": recommended_post_types,
         "benchmark_influencer_count": selected_count,
         "gap_elements_count": gap_score,
+        "overall_gap_score": weighted_gap_score,
+        "day_selection_rationale": strategy.get("day_selection_rationale") or "Days selected to maximize consistency and domain authority building.",
         "rationale": rationale,
     }
 
@@ -154,6 +172,16 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
     content_pillars = []
     proposed_schedule = []
     benchmarked = []
+    recommended_days = []
+    recommended_times = []
+    score_values = {
+        "profile_gap_score": [],
+        "authority_gap_score": [],
+        "engagement_gap_score": [],
+        "consistency_gap_score": [],
+        "domain_positioning_gap_score": [],
+        "overall_gap_score": [],
+    }
 
     for entry in per_influencer_entries:
         influencer = entry.get("influencer") or {}
@@ -161,6 +189,7 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
 
         gap_out = entry.get("analysis") or {}
         gap = gap_out.get("gap_analysis") or {}
+        gap_scores = gap_out.get("gap_scores") or {}
         strategy = gap_out.get("content_strategy") or {}
 
         if gap.get("profile_completeness_gap"):
@@ -173,9 +202,24 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
         key_missing.extend(gap.get("key_missing_elements") or [])
         action_plan.extend(gap_out.get("action_plan") or [])
         content_pillars.extend(strategy.get("content_pillars") or [])
+        recommended_days.extend(strategy.get("recommended_days") or [])
+        if strategy.get("recommended_time_utc"):
+            recommended_times.append(str(strategy.get("recommended_time_utc")))
         for item in strategy.get("proposed_schedule") or []:
             if isinstance(item, dict):
                 proposed_schedule.append(item)
+
+        for score_key in score_values.keys():
+            score_value = gap_scores.get(score_key)
+            if isinstance(score_value, (int, float)):
+                score_values[score_key].append(float(score_value))
+
+    avg_scores = {}
+    for score_key, values in score_values.items():
+        avg_scores[score_key] = round(sum(values) / len(values), 2) if values else None
+
+    resolved_days = _unique_keep_order(recommended_days)[:5]
+    resolved_time = recommended_times[0] if recommended_times else "11:00"
 
     return {
         "benchmarked_influencers": benchmarked,
@@ -188,8 +232,12 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
         "overall_content_strategy": {
             "content_pillars": _unique_keep_order(content_pillars)[:6],
             "proposed_schedule": proposed_schedule[:10],
+            "recommended_days": resolved_days,
+            "recommended_time_utc": resolved_time,
+            "day_selection_rationale": "Days are combined from per-influencer strategy to sustain consistency and engagement growth.",
             "tone_adjustment": "Align tone with selected influencer benchmarks while keeping your own authentic voice.",
         },
+        "overall_gap_scores": avg_scores,
         "overall_action_plan": _unique_keep_order(action_plan)[:8],
     }
 
@@ -197,7 +245,7 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
 @router.post("/pipeline/run", response_model=PipelineResponse)
 async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depends(get_db)):
     """Run the full agentic AI pipeline for a given user."""
-    _ensure_groq_key()
+    _ensure_openai_key()
 
     # Get user and resume path
     result = await db.execute(select(User).where(User.id == request.user_id))
@@ -592,11 +640,13 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
             # Append Post Generator result first
             results.append(post_agent_result)
             
-            # Update user schedule if present, but keep the posting time fixed at 11:00 AM UTC.
+            # Update user schedule from model suggestion (or robust fallback strategy).
             out_data = ar_posts.get("output", {})
-            if "posting_schedule_days" in out_data:
-                user.posting_schedule = out_data["posting_schedule_days"]
-            user.posting_time_utc = "11:00"
+            user.posting_schedule = pick_posting_schedule(
+                post_output=out_data,
+                gap_analysis=request.gap_analysis_data or {},
+            )
+            user.posting_time_utc = normalize_posting_time_utc(out_data.get("posting_time_utc"), fallback="11:00")
             user.cache_updated_at = datetime.utcnow()
             await db.commit()
 
@@ -734,6 +784,56 @@ async def send_post_email(request: SendPostEmailRequest, db: AsyncSession = Depe
         print(f"Post delivery email error: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Post delivery email failed: {str(e)}")
+
+
+@router.post("/pipeline/scrape-linkedin-posts", response_model=GapAnalysisResponse)
+async def scrape_linkedin_posts(request: ScrapeLinkedInPostsRequest, db: AsyncSession = Depends(get_db)):
+    """Scrape posts from a selected LinkedIn URL via PhantomBuster and store the result."""
+    user_result = await db.execute(select(User).where(User.id == request.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        ar_scrape = await run_linkedin_post_scraper(
+            selected_url=request.selected_url,
+            phantombuster_url=request.phantombuster_url,
+            user_email=user.email,
+        )
+
+        if ar_scrape.get("status") != "success":
+            detail = ar_scrape.get("error") or "LinkedIn scraping failed"
+            raise HTTPException(status_code=502, detail=detail)
+
+        db.add(AgentOutput(
+            user_id=user.id,
+            agent_name="LinkedIn Post Scraper Agent",
+            agent_description="Scrapes public LinkedIn post data from a selected URL via PhantomBuster",
+            status=ar_scrape["status"],
+            output_data=ar_scrape.get("output"),
+            error_message=ar_scrape.get("error"),
+        ))
+        await db.commit()
+
+        return GapAnalysisResponse(
+            message="LinkedIn posts scraped successfully",
+            results=[
+                AgentResult(
+                    agent_name="LinkedIn Post Scraper Agent",
+                    agent_description="Scrapes public LinkedIn post data from a selected URL via PhantomBuster",
+                    status=ar_scrape["status"],
+                    output=ar_scrape.get("output"),
+                    error=ar_scrape.get("error"),
+                )
+            ],
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        import traceback
+        print(f"LinkedIn scrape error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"LinkedIn scraping failed: {str(e)}")
 
 
 @router.get("/posting-schedule/{user_id}")

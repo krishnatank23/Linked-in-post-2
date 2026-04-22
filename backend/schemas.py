@@ -82,6 +82,12 @@ class SendPostEmailRequest(BaseModel):
     posts_data: dict
 
 
+class ScrapeLinkedInPostsRequest(BaseModel):
+    user_id: int
+    selected_url: str
+    phantombuster_url: Optional[str] = None
+
+
 # ─── Save Result Schemas ───
 class SaveResultRequest(BaseModel):
     user_id: int

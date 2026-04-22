@@ -13,6 +13,7 @@ from agents.influencer_agent import run_influencer_search
 from agents.gap_analyzer_agent import run_gap_analysis
 from agents.post_generator_agent import run_post_generation
 from agents.email_reminder_agent import run_email_reminder
+from scheduling_utils import pick_posting_schedule, normalize_posting_time_utc
 
 
 class PipelineState(TypedDict):
@@ -104,19 +105,7 @@ async def influence_scout_node(state: PipelineState) -> PipelineState:
         if influencers:
             state["selected_influencer"] = influencers[0]
         else:
-            # Fallback keeps automation moving when search returns no public profiles.
-            profile = state.get("parsed_profile") or {}
-            target_domain = (
-                profile.get("target_role")
-                or profile.get("headline")
-                or profile.get("summary")
-                or "Professional Growth"
-            )
-            state["selected_influencer"] = {
-                "title": f"Top {target_domain} thought leader",
-                "link": "https://www.linkedin.com/in/sample-thought-leader",
-                "snippet": "Synthetic benchmark profile generated as fallback for automated strategy planning.",
-            }
+            state["selected_influencer"] = None
 
     state["agent_results"].append(agent_result)
     return state
@@ -200,8 +189,8 @@ async def post_generation_node(state: PipelineState) -> PipelineState:
 
 async def save_posts_to_db_node(state: PipelineState) -> PipelineState:
     """Node 5.5: Save generated posts and posting schedule to database.
-    
-    Now works with exactly 2 posts per generation, with 2 scheduled days per week.
+
+    Supports flexible schedules such as 3 days/week (e.g. Monday/Wednesday/Friday).
     """
     try:
         from database import async_session
@@ -220,13 +209,15 @@ async def save_posts_to_db_node(state: PipelineState) -> PipelineState:
             post_output = state.get("post_generation_output", {})
             posts = post_output.get("posts", [])
             
-            # Should have exactly 2 posts
-            if len(posts) != 2:
-                print(f"[WORKFLOW WARNING] Expected 2 posts but got {len(posts)}")
-            
-            # Extract posting schedule from the output, but keep the time fixed for everyone.
-            posting_schedule_days = post_output.get("posting_schedule_days", ["Monday", "Thursday"])
-            posting_time_utc = "11:00"
+            if not posts:
+                print("[WORKFLOW WARNING] No posts generated; skipping post save")
+                return state
+
+            posting_schedule_days = pick_posting_schedule(
+                post_output=post_output,
+                gap_analysis=state.get("gap_analysis") or {},
+            )
+            posting_time_utc = normalize_posting_time_utc(post_output.get("posting_time_utc"), fallback="11:00")
             
             # Save posting schedule to user (for automated scheduler)
             if posting_schedule_days:
@@ -244,13 +235,9 @@ async def save_posts_to_db_node(state: PipelineState) -> PipelineState:
             current_day = today.weekday()  # 0=Monday, 6=Sunday
             hour, minute = map(int, posting_time_utc.split(":"))
             
-            # Save each of the 2 posts with their scheduled dates
+            # Save each generated post and cycle through configured weekday slots.
             for idx, post in enumerate(posts):
-                # Each post gets scheduled on its corresponding day from posting_schedule_days
-                if idx < len(posting_schedule_days):
-                    scheduled_day_name = posting_schedule_days[idx]
-                else:
-                    scheduled_day_name = posting_schedule_days[0]  # Fallback to first day
+                scheduled_day_name = posting_schedule_days[idx % len(posting_schedule_days)]
                 
                 scheduled_day_num = day_mapping.get(scheduled_day_name, 0)
                 

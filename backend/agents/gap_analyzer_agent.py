@@ -2,15 +2,15 @@ import os
 import json
 import traceback
 from typing import Any
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
-from agents.groq_guard import guarded_groq_ainvoke
+from agents.llm_guard import guarded_llm_ainvoke
 
 load_backend_env()
 
 GAP_ANALYSIS_PROMPT = """You are a senior personal branding strategist and LinkedIn content expert.
-Your goal is to analyze the "gap" between a user and their industry "idol" (influencer) and provide a concrete content strategy to bridge that gap.
+Your goal is to analyze the gap between the user and ONE selected influencer, then produce a concrete and measurable strategy.
 
 USER DATA:
 Profile: {user_profile}
@@ -19,23 +19,62 @@ Brand Voice: {brand_voice}
 INFLUENCER DATA:
 {influencer_data}
 
-Provide a structured analysis in JSON format:
+Rules:
+- Be specific and evidence-oriented, avoid generic advice.
+- Compare user profile + likely content posture against influencer strengths.
+- Use domain-aware recommendations (user domain and niche must drive the strategy).
+- Focus on professional, insightful, meaningful communication style.
+
+Provide JSON in this exact structure:
 
 {{
+    "influencer_snapshot": {{
+        "name": "Influencer name/title",
+        "positioning_summary": "1-2 lines on why this influencer is strong"
+    }},
     "gap_analysis": {{
-        "profile_completeness_gap": "Comparison of profile impact and authority (1-2 sentences)",
-        "content_authority_gap": "Analysis of the gap in perceived expertise and thought leadership",
-        "engagement_gap": "Differences in how the influencer engages vs the user's current potential",
-        "key_missing_elements": ["List of 3-5 specific things the influencer has that the user is missing"]
+        "profile_completeness_gap": "Specific comparison of profile impact and authority",
+        "content_authority_gap": "Specific thought-leadership/content gap",
+        "engagement_gap": "Specific audience interaction/engagement gap",
+        "posting_consistency_gap": "Specific cadence and consistency gap",
+        "domain_positioning_gap": "Specific niche/domain positioning gap",
+        "key_missing_elements": ["5-8 concrete missing elements"]
+    }},
+    "gap_scores": {{
+        "profile_gap_score": 0,
+        "authority_gap_score": 0,
+        "engagement_gap_score": 0,
+        "consistency_gap_score": 0,
+        "domain_positioning_gap_score": 0,
+        "overall_gap_score": 0
+    }},
+    "comparison_matrix": {{
+        "profile": {{
+            "user_state": "Current user state",
+            "influencer_state": "Influencer state",
+            "delta": "What must change"
+        }},
+        "content": {{
+            "user_state": "Current user state",
+            "influencer_state": "Influencer state",
+            "delta": "What must change"
+        }},
+        "engagement": {{
+            "user_state": "Current user state",
+            "influencer_state": "Influencer state",
+            "delta": "What must change"
+        }}
     }},
     "content_strategy": {{
-        "content_pillars": ["3 core themes the user should own to bridge the gap"],
+        "content_pillars": ["4-6 core domain themes the user should own"],
+        "interactive_content_formats": ["Poll", "Debate post", "Ask-me-anything", "Case breakdown"],
+        "recommended_post_types": ["Educational", "Thought Leadership", "Interactive", "Case Study"],
         "proposed_schedule": [
             {{
                 "day": "Day 1",
-                "post_type": "e.g., Educational / Storytelling",
-                "topic": "Specific topic idea",
-                "goal": "Why this post helps bridge the gap"
+                "post_type": "Educational / Storytelling / Interactive / Thought Leadership",
+                "topic": "Specific domain topic",
+                "goal": "How this closes a specific gap"
             }},
             {{
                 "day": "Day 3",
@@ -50,13 +89,23 @@ Provide a structured analysis in JSON format:
                 "goal": "..."
             }}
         ],
-        "tone_adjustment": "Specific advice on how to tweak their voice to match industry leaders"
+        "recommended_days": ["Monday", "Wednesday", "Friday"],
+        "recommended_time_utc": "11:00",
+        "day_selection_rationale": "Why these days fit the user gap profile",
+        "tone_adjustment": "How to keep professional tone while adding authority and interaction"
     }},
     "action_plan": [
-        "Immediate step 1 to improve visibility",
-        "Immediate step 2 to build authority",
-        "Immediate step 3 to increase network quality"
-    ]
+        "Immediate step 1",
+        "Immediate step 2",
+        "Immediate step 3",
+        "Immediate step 4",
+        "Immediate step 5"
+    ],
+    "reminder_plan": {{
+        "reminder_days": ["Monday", "Wednesday", "Friday"],
+        "reminder_time_utc": "11:00",
+        "why_this_reminder_cadence": "Why these reminders are needed for consistency"
+    }}
 }}
 
 Return ONLY the JSON object, no markdown fences, no extra text.
@@ -67,16 +116,16 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
     Agent 4: Perform gap analysis between user and influencer, then generate content strategy.
     """
     try:
-        llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        llm = ChatOpenAI(
+            model=os.getenv("GAP_ANALYZER_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
             temperature=0.4,
-            api_key=os.getenv("GROQ_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),
         )
         
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
         chain = prompt | llm
         
-        response = await guarded_groq_ainvoke(
+        response = await guarded_llm_ainvoke(
             chain,
             {
                 "user_profile": json.dumps(user_profile, indent=2),

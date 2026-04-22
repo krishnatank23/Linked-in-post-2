@@ -3,14 +3,14 @@ import traceback
 from typing import Any
 from PyPDF2 import PdfReader
 from docx import Document
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from path_resolver import resolve_resume_path
 
 import asyncio
 import json
-from agents.groq_guard import guarded_groq_ainvoke
+from agents.llm_guard import guarded_llm_ainvoke
 load_backend_env()
 
 RESUME_PARSER_PROMPT = """You are an expert resume and LinkedIn profile analyzer. 
@@ -116,7 +116,7 @@ def extract_resume_text(file_path: str) -> str:
 
 async def run_resume_parser(file_path: str) -> dict[str, Any]:
     """
-    Agent 1: Parse resume and extract structured data using Groq LLM.
+    Agent 1: Parse resume and extract structured data using OpenAI LLM.
     Returns a dict with status, output, and optional error.
     """
     try:
@@ -130,18 +130,18 @@ async def run_resume_parser(file_path: str) -> dict[str, Any]:
                 "error": "Could not extract sufficient text from the resume. Please upload a valid PDF or DOCX file.",
             }
 
-        # Step 2: Use Groq LLM to parse and structure the resume
-        llm = ChatGroq(
-            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        # Step 2: Use OpenAI LLM to parse and structure the resume
+        llm = ChatOpenAI(
+            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
             temperature=0.1,
-            api_key=os.getenv("GROQ_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),
         )
 
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
         chain = prompt | llm
 
         try:
-            response = await guarded_groq_ainvoke(
+            response = await guarded_llm_ainvoke(
                 chain,
                 {"resume_text": resume_text},
                 timeout_seconds=45,
@@ -187,9 +187,8 @@ async def run_resume_parser(file_path: str) -> dict[str, Any]:
                 "status": "error",
                 "output": None,
                 "error": (
-                    "Groq API token limit reached during Resume Parser. "
-                    "Please wait for the retry window shown by Groq (for example, 'try again in 7m9s'), "
-                    "or upgrade Groq tier / use a lower-token model."
+                    "OpenAI API token limit reached during Resume Parser. "
+                    "Please check your quota or wait for the retry window."
                 ),
             }
         return {

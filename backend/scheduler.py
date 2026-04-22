@@ -7,8 +7,9 @@ from sqlalchemy import select
 
 from database import async_session
 from models import User, AgentOutput
-from agents.groq_guard import set_current_user_context
+from agents.llm_guard import set_current_user_context
 from agents.runtime_status import clear_status
+from scheduling_utils import normalize_posting_schedule
 
 scheduler = AsyncIOScheduler()
 
@@ -40,11 +41,21 @@ async def morning_post_generation_check():
             for user in users:
                 try:
                     # 1. Check if user has a schedule configured
-                    if not user.posting_schedule or not isinstance(user.posting_schedule, list):
+                    schedule_days = normalize_posting_schedule(user.posting_schedule, fallback=[])
+                    if not schedule_days:
                         continue
+
+                    # Persist normalized schedule (for case-insensitive / typo-tolerant matching going forward).
+                    if user.posting_schedule != schedule_days:
+                        user.posting_schedule = schedule_days
                     
                     # 2. Check if today is a scheduled posting day
-                    if current_day not in user.posting_schedule:
+                    if current_day not in schedule_days:
+                        continue
+
+                    # 2.5. Prevent accidental duplicate sends if scheduler restarts on the same day.
+                    if user.last_automated_post_at and user.last_automated_post_at.date() == now.date():
+                        print(f"[MORNING CHECK] SKIP User {user.email} already processed today.")
                         continue
                     
                     # 3. Check if user has cached data
@@ -69,13 +80,14 @@ async def morning_post_generation_check():
                         continue
                     
                     users_needing_posts.append(user)
-                    print(f"[MORNING CHECK] OK User {user.email} needs posts today (scheduled: {user.posting_schedule} @ {user.posting_time_utc})")
+                    print(f"[MORNING CHECK] OK User {user.email} needs posts today (scheduled: {schedule_days} @ {user.posting_time_utc})")
                     
                 except Exception as e:
                     print(f"[MORNING CHECK ERROR] Failed to check user: {e}")
                     continue
             
             # Report findings
+            await db.commit()
             print(f"\n[MORNING CHECK] Found {len(users_needing_posts)} user(s) needing posts today")
             
             if not users_needing_posts:

@@ -2,16 +2,16 @@ import os
 import json
 import traceback
 from typing import Any
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
-from agents.groq_guard import guarded_groq_ainvoke, _current_user_id
+from agents.llm_guard import guarded_llm_ainvoke, _current_user_id
 
 load_backend_env()
 
-POST_GENERATION_PROMPT = """You are a world-class LinkedIn ghostwriter and content strategist with expertise in creating viral, authentic professional content.
+POST_GENERATION_PROMPT = """You are a world-class LinkedIn ghostwriter and content strategist with expertise in professional, high-impact domain content.
 
-Your task: Generate EXACTLY 2 completely unique LinkedIn posts tailored to this user's professional domain and gap analysis. You will AUTONOMOUSLY decide the best topics and angles based on the user's profile, brand voice, and industry trends.
+Your task: Generate EXACTLY 2 completely unique LinkedIn posts tailored to this user's domain and the specific gaps identified in gap analysis. You must decide topics and angles from the gap evidence.
 
 USER PROFILE:
 {user_profile}
@@ -77,6 +77,18 @@ EXAMPLE SCENARIO:
 
 ═══════════════════════════════════════════════════════════════════
 
+DAY & REMINDER STRATEGY RULES (MANDATORY):
+
+1. Choose posting days based on the gap analysis intensity:
+- High consistency/engagement gap: 4-5 posts/week
+- Medium gap: 3-4 posts/week
+- Lower gap: 2-3 posts/week
+
+2. Include explicit rationale for why selected days and time support improvement.
+3. Keep schedule realistic and repeatable for long-term consistency.
+
+═══════════════════════════════════════════════════════════════════
+
 HUMANIZATION & QUALITY RULES (CRITICAL):
 
 - Write like a human having a smart conversation with peers
@@ -93,15 +105,17 @@ HOOK & ENGAGEMENT:
 - Include thought-provoking lines that invite discussion
 - End with a genuine question that encourages comments
 - Make it about the reader, not about promoting yourself
+- Every post must include an interaction trigger (question, challenge, request for perspective, or mini-poll style prompt)
 
 ═══════════════════════════════════════════════════════════════════
 
 OUTPUT FORMAT (JSON ONLY):
 
 {{
-    "posting_frequency": "2 posts per week (biweekly strategy)",
-    "posting_schedule_days": ["Monday", "Thursday"],
+    "posting_frequency": "3 posts per week",
+    "posting_schedule_days": ["Monday", "Wednesday", "Friday"],
     "posting_time_utc": "11:00",
+    "posting_schedule_rationale": "Why these days and time were chosen based on identified gaps",
     "autonomous_topic_selection_rationale": {{
         "primary_gap_addressed": "Explanation of what gap post 1 addresses",
         "secondary_gap_addressed": "Explanation of what gap post 2 addresses",
@@ -112,12 +126,14 @@ OUTPUT FORMAT (JSON ONLY):
             "type": "First post type chosen",
             "topic": "Specific topic title",
             "reasoning": "Why this topic was chosen based on gaps and domain",
+            "interaction_goal": "What engagement behavior this post is trying to create",
             "content": "Full, complete post text (minimum 3-5 paragraphs)"
         }},
         {{
             "type": "Second post type chosen (MUST BE DIFFERENT FROM FIRST)",
             "topic": "Completely different specific topic",
             "reasoning": "Why this topic complements the first and addresses different aspect",
+            "interaction_goal": "What engagement behavior this post is trying to create",
             "content": "Full, complete post text (minimum 3-5 paragraphs)"
         }}
     ]
@@ -183,16 +199,16 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_posts_text = "No previous posts (first generation)."
             previous_types_text = "None"
         
-        llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        llm = ChatOpenAI(
+            model=os.getenv("POST_GENERATOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
             temperature=0.8,  # Slightly higher for more creative autonomy
-            api_key=os.getenv("GROQ_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),
         )
         
         prompt = ChatPromptTemplate.from_template(POST_GENERATION_PROMPT)
         chain = prompt | llm
         
-        response = await guarded_groq_ainvoke(
+        response = await guarded_llm_ainvoke(
             chain,
             {
                 "user_profile": json.dumps(user_profile, indent=2),

@@ -25,6 +25,11 @@ interface PipelineStep {
   description: string;
 }
 
+interface InfluencerAnalysisDraft {
+  profileFile: File | null;
+  manualPosts: string;
+}
+
 const PIPELINE_STEPS: PipelineStep[] = [
   {
     id: 'resume',
@@ -97,8 +102,8 @@ function StepDots({ current, statuses }: { current: number; statuses: StepStatus
               idx === current
                 ? step.color
                 : statuses[idx] === 'complete'
-                ? '#7a9e87'
-                : 'rgba(180,160,140,0.35)',
+                  ? '#7a9e87'
+                  : 'rgba(180,160,140,0.35)',
           }}
         />
       ))}
@@ -123,12 +128,14 @@ export default function StudioPage() {
   const [results, setResults] = useState<any[]>([]);
   const [influencers, setInfluencers] = useState<any[]>([]);
   const [selectedInfluencers, setSelectedInfluencers] = useState<any[]>([]);
+  const [selectedInfluencerDrafts, setSelectedInfluencerDrafts] = useState<Record<string, InfluencerAnalysisDraft>>({});
   const [gapAnalysisData, setGapAnalysisData] = useState<any | null>(null);
   const [postResults, setPostResults] = useState<any[]>([]);
   const [scrapedInfluencerData, setScrapedInfluencerData] = useState<any | null>(null);
   const [scrapeTargetUrl, setScrapeTargetUrl] = useState('');
   const [phantombusterUrl, setPhantombusterUrl] = useState('');
   const [scrapingPosts, setScrapingPosts] = useState(false);
+  const [pastPostsInput, setPastPostsInput] = useState('');
 
   /* UI */
   const [activeStepIdx, setActiveStepIdx] = useState(0);
@@ -159,6 +166,19 @@ export default function StudioPage() {
     if (selectedInfluencers.length > 0) {
       setScrapeTargetUrl(selectedInfluencers[0].link || '');
     }
+  }, [selectedInfluencers]);
+
+  useEffect(() => {
+    setSelectedInfluencerDrafts((prev) => {
+      const nextDrafts: Record<string, InfluencerAnalysisDraft> = {};
+
+      selectedInfluencers.forEach((influencer) => {
+        const key = String(influencer.link || influencer.title || influencer.name || '');
+        nextDrafts[key] = prev[key] || { profileFile: null, manualPosts: '' };
+      });
+
+      return nextDrafts;
+    });
   }, [selectedInfluencers]);
 
   /* live polling */
@@ -215,6 +235,15 @@ export default function StudioPage() {
     return r?.output || null;
   }, [postResults]);
 
+  const detectedPastPostsCount = useMemo(() => {
+    const raw = pastPostsInput.trim();
+    if (!raw) return 0;
+    const blocks = raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
+    if (blocks.length > 1) return blocks.length;
+    const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    return lines.length > 1 ? lines.length : 1;
+  }, [pastPostsInput]);
+
   /* actions */
   const runPipeline = async () => {
     if (!user) return;
@@ -253,6 +282,18 @@ export default function StudioPage() {
     });
   };
 
+  const getInfluencerKey = (inf: any) => String(inf.link || inf.title || inf.name || '');
+
+  const updateInfluencerDraft = (key: string, updates: Partial<InfluencerAnalysisDraft>) => {
+    setSelectedInfluencerDrafts((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || { profileFile: null, manualPosts: '' }),
+        ...updates,
+      },
+    }));
+  };
+
   const runGapAnalysis = async (): Promise<boolean> => {
     if (!user || (selectedInfluencers.length === 0 && !scrapedInfluencerData)) {
       toast.error('Select or scrape at least one LinkedIn URL first.');
@@ -261,7 +302,34 @@ export default function StudioPage() {
     setRunningGap(true);
     try {
       const influencerData = scrapedInfluencerData ? [scrapedInfluencerData] : selectedInfluencers;
-      const res = await api.post('/pipeline/gap-analysis', { user_id: user.id, influencer_data: influencerData });
+      const analyzedInfluencers = influencerData.map((influencer, idx) => {
+        const key = getInfluencerKey(influencer);
+        const draft = selectedInfluencerDrafts[key];
+        const manualPosts = String(draft?.manualPosts || '').trim();
+        return {
+          ...influencer,
+          selection_index: idx,
+          manual_post_samples: manualPosts,
+        };
+      });
+
+      const formData = new FormData();
+      formData.append('user_id', String(user.id));
+      formData.append('selected_influencers_json', JSON.stringify(analyzedInfluencers));
+      formData.append('user_past_posts', pastPostsInput.trim());
+
+      analyzedInfluencers.forEach((influencer, idx) => {
+        const key = getInfluencerKey(influencer);
+        const draft = selectedInfluencerDrafts[key];
+        const profileFile = draft?.profileFile;
+        if (profileFile) {
+          formData.append('profile_files', profileFile, profileFile.name);
+        } else {
+          formData.append('profile_files', new File([''], `${key || `influencer-${idx}`}-placeholder.txt`, { type: 'text/plain' }));
+        }
+      });
+
+      const res = await api.post('/pipeline/gap-analysis-context', formData);
       const next = res.data.results || [];
       const gap = next.find((r: any) => r.agent_name?.includes('Gap Analysis'));
       setGapAnalysisData(gap?.output || null);
@@ -320,7 +388,26 @@ export default function StudioPage() {
     if (!user || !gapAnalysisData) { toast.error('Complete gap analysis first.'); return false; }
     setGeneratingPosts(true);
     try {
-      const res = await api.post('/pipeline/generate-posts', { user_id: user.id, gap_analysis_data: gapAnalysisData });
+      const raw = pastPostsInput.trim();
+      const blocks = raw
+        ? raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean)
+        : [];
+      const normalizedPosts = blocks.length > 1
+        ? blocks
+        : raw
+          ? raw.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
+      const limitedPosts = normalizedPosts.slice(0, 10);
+      if (normalizedPosts.length > 10) {
+        toast('Only the first 10 pasted posts will be used for tone/emotion extraction.');
+      }
+      const userPastPosts = limitedPosts.join('\n\n');
+
+      const res = await api.post('/pipeline/generate-posts', {
+        user_id: user.id,
+        gap_analysis_data: gapAnalysisData,
+        user_past_posts: userPastPosts,
+      });
       const next = res.data.results || [];
       setPostResults(next);
       setResults(prev => [...prev, ...next]);
@@ -398,7 +485,7 @@ export default function StudioPage() {
           : activeStepIdx === PIPELINE_STEPS.length - 1;
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ background: 'var(--cream)' }}>
+    <div className="relative min-h-screen overflow-hidden text-[#1c1a17]" style={{ background: '#ede9e3ff' }}>
       <div className="relative z-10 flex h-screen overflow-hidden">
 
         {/* ═══════════════════════════════════════════
@@ -407,7 +494,7 @@ export default function StudioPage() {
         <aside
           className="flex flex-col w-72 shrink-0 overflow-y-auto"
           style={{
-            background: 'rgba(255,255,255,0.82)',
+            background: '#eeebe6ff',
             borderRight: '1px solid rgba(180,160,140,0.2)',
             backdropFilter: 'blur(28px)',
             boxShadow: '4px 0 30px rgba(50,40,30,0.08)',
@@ -548,15 +635,14 @@ export default function StudioPage() {
                           background: isDone
                             ? 'rgba(16,185,129,0.15)'
                             : isRunning || isActive
-                            ? `${step.color}18`
-                            : 'rgba(180,160,140,0.12)',
-                          border: `1.5px solid ${
-                            isDone
-                              ? 'rgba(16,185,129,0.45)'
-                              : isRunning || isActive
+                              ? `${step.color}18`
+                              : 'rgba(180,160,140,0.12)',
+                          border: `1.5px solid ${isDone
+                            ? 'rgba(16,185,129,0.45)'
+                            : isRunning || isActive
                               ? `${step.color}55`
                               : 'rgba(180,160,140,0.2)'
-                          }`,
+                            }`,
                           boxShadow: 'none',
                         }}
                       >
@@ -599,22 +685,22 @@ export default function StudioPage() {
                           background: isDone
                             ? 'rgba(16,185,129,0.15)'
                             : isRunning
-                            ? `${step.color}20`
-                            : isActive
-                            ? 'rgba(180,160,140,0.2)'
-                            : 'transparent',
+                              ? `${step.color}20`
+                              : isActive
+                                ? 'rgba(180,160,140,0.2)'
+                                : 'transparent',
                           color: isDone
-                            ? '#34d399'
+                            ? 'rgba(180,160,140,0.2)'
                             : isRunning
-                            ? step.color
-                            : isActive
-                            ? 'rgba(90,85,80,0.8)'
-                            : 'rgba(180,160,140,0.4)',
+                              ? step.color
+                              : isActive
+                                ? 'rgba(90,85,80,0.8)'
+                                : 'rgba(180,160,140,0.4)',
                           border: isDone
                             ? '1px solid rgba(16,185,129,0.25)'
                             : isRunning
-                            ? `1px solid ${step.color}40`
-                            : 'none',
+                              ? `1px solid ${step.color}40`
+                              : 'none',
                         }}
                       >
                         {isDone ? '✓' : isRunning ? 'Live' : isActive ? 'Open' : `${idx + 1}`}
@@ -689,21 +775,20 @@ export default function StudioPage() {
                   background: currentStatus === 'complete'
                     ? 'rgba(16,185,129,0.15)'
                     : currentStatus === 'running'
-                    ? `${currentStep.color}18`
-                    : 'rgba(180,160,140,0.15)',
-                  border: `1px solid ${
-                    currentStatus === 'complete'
-                      ? 'rgba(16,185,129,0.35)'
-                      : currentStatus === 'running'
+                      ? `${currentStep.color}18`
+                      : 'rgba(180,160,140,0.15)',
+                  border: `1px solid ${currentStatus === 'complete'
+                    ? 'rgba(16,185,129,0.35)'
+                    : currentStatus === 'running'
                       ? `${currentStep.color}45`
                       : 'rgba(180,160,140,0.25)'
-                  }`,
+                    }`,
                   color:
                     currentStatus === 'complete'
                       ? '#7a9e87'
                       : currentStatus === 'running'
-                      ? currentStep.color
-                      : 'rgba(90,85,80,0.55)',
+                        ? currentStep.color
+                        : 'rgba(90,85,80,0.55)',
                 }}
               >
                 {currentStatus === 'complete' ? '✓ Complete' : currentStatus === 'running' ? '⚡ Running' : 'Idle'}
@@ -808,10 +893,10 @@ export default function StudioPage() {
                           <div className="font-semibold text-[#1c1a17]/35 mb-1">No output yet</div>
                           <div className="text-sm max-w-xs" style={{ color: 'rgba(90,85,80,0.45)' }}>
                             {activeStepIdx === 0 ? 'Click "Run Pipeline" in the sidebar to start.' :
-                             activeStepIdx === 3 ? 'Select influencers (Step 3), then run Gap Analysis below.' :
-                             activeStepIdx === 4 ? 'Complete Gap Analysis (Step 4) first, then generate posts below.' :
-                             activeStepIdx === 5 ? 'Generate posts (Step 5) first, then send to email below.' :
-                             'Run the pipeline first.'}
+                              activeStepIdx === 3 ? 'Select influencers (Step 3), then run Gap Analysis below.' :
+                                activeStepIdx === 4 ? 'Complete Gap Analysis (Step 4) first, then generate posts below.' :
+                                  activeStepIdx === 5 ? 'Generate posts (Step 5) first, then send to email below.' :
+                                    'Run the pipeline first.'}
                           </div>
                         </div>
                       </div>
@@ -911,6 +996,102 @@ export default function StudioPage() {
                     </div>
                   )}
 
+                  {selectedInfluencers.length > 0 ? (
+                    <div className="mt-5 rounded-2xl p-4 md:p-5" style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(180,160,140,0.22)' }}>
+                      <div className="flex flex-col gap-2 mb-4">
+                        <div className="font-semibold text-[#1c1a17]/90">Selected Influencers for Gap Analysis</div>
+                        <div className="text-xs" style={{ color: 'rgba(90,85,80,0.68)' }}>
+                          Upload one PDF profile for each selected influencer and paste any supporting post samples. These are used to sharpen the gap analysis.
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        {selectedInfluencers.map((inf, idx) => {
+                          const key = getInfluencerKey(inf);
+                          const draft = selectedInfluencerDrafts[key] || { profileFile: null, manualPosts: '' };
+
+                          return (
+                            <div key={key || idx} className="rounded-2xl border border-[rgba(180,160,140,0.22)] bg-white/80 p-4 shadow-[0_4px_20px_rgba(50,40,30,0.05)]">
+                              <div className="flex items-start justify-between gap-3 mb-3">
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-[#1c1a17] truncate">{inf.title || inf.name || `Influencer ${idx + 1}`}</div>
+                                  {inf.link ? (
+                                    <a
+                                      href={inf.link}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-1 inline-flex text-[11px] underline underline-offset-2 break-all"
+                                      style={{ color: 'rgba(74,91,140,0.92)' }}
+                                    >
+                                      {inf.link}
+                                    </a>
+                                  ) : null}
+                                </div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full" style={{ background: 'rgba(201,113,79,0.12)', color: 'rgba(201,113,79,0.95)' }}>
+                                  Ready
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <label className="block">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-2" style={{ color: 'rgba(90,85,80,0.7)' }}>
+                                    Upload profile PDF
+                                  </div>
+                                  <input
+                                    type="file"
+                                    accept=".pdf"
+                                    onChange={(e) => updateInfluencerDraft(key, { profileFile: e.target.files?.[0] || null })}
+                                    className="w-full rounded-xl border border-[rgba(180,160,140,0.2)] bg-[rgba(180,160,140,0.08)] px-3 py-2 text-sm"
+                                    style={{ color: 'rgba(28,26,23,0.95)' }}
+                                  />
+                                </label>
+
+                                {draft.profileFile ? (
+                                  <div className="text-[11px] px-3 py-2 rounded-xl bg-black/5 border border-black/10" style={{ color: 'rgba(90,85,80,0.78)' }}>
+                                    Selected file: {draft.profileFile.name}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] px-3 py-2 rounded-xl bg-black/5 border border-dashed border-black/10" style={{ color: 'rgba(90,85,80,0.55)' }}>
+                                    No profile PDF selected yet.
+                                  </div>
+                                )}
+
+                                <label className="block">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-2" style={{ color: 'rgba(90,85,80,0.7)' }}>
+                                    Paste influencer posts / notes
+                                  </div>
+                                  <textarea
+                                    value={draft.manualPosts}
+                                    onChange={(e) => updateInfluencerDraft(key, { manualPosts: e.target.value })}
+                                    placeholder="Paste sample posts or notes from this influencer..."
+                                    className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-y"
+                                    style={{ background: 'rgba(180,160,140,0.1)', border: '1px solid rgba(180,160,140,0.2)', color: 'rgba(28,26,23,0.98)', minHeight: '120px' }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(180,160,140,0.18)' }}>
+                        <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] mb-2" style={{ color: 'rgba(90,85,80,0.7)' }}>
+                          Your last 10 LinkedIn posts
+                        </label>
+                        <textarea
+                          value={pastPostsInput}
+                          onChange={(e) => setPastPostsInput(e.target.value)}
+                          placeholder="Paste your own recent posts here so the model can capture your emotion, cadence, and voice..."
+                          className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-y"
+                          style={{ background: 'rgba(180,160,140,0.1)', border: '1px solid rgba(180,160,140,0.2)', color: 'rgba(28,26,23,0.98)', minHeight: '140px' }}
+                        />
+                        <div className="mt-2 text-[11px]" style={{ color: 'rgba(90,85,80,0.65)' }}>
+                          Detected posts: {Math.min(detectedPastPostsCount, 10)} / 10 (split by blank lines).
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="mt-5 rounded-2xl p-4 md:p-5" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(180,160,140,0.2)' }}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
                       <div>
@@ -966,30 +1147,11 @@ export default function StudioPage() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl p-6"
-                  style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(245,158,11,0.2)' }}
+                  style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(180,160,140,0.2)' }}
                 >
-                  <div className="font-semibold text-[#1c1a17]/85 mb-1">Run Gap Analysis</div>
+                  <div className="font-semibold text-[#1c1a17] mb-1">Gap Analysis Ready</div>
                   <div className="text-sm" style={{ color: 'rgba(90,85,80,0.7)' }}>
-                    {selectedInfluencers.length > 0 || scrapedInfluencerData
-                      ? `Ready to analyze ${selectedInfluencers.length} influencer(s) vs your brand. Use the bottom-right button to run it.`
-                      : 'Select an influencer or scrape a LinkedIn URL before running gap analysis.'}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ── Step 4 (idx=4): Generate Posts action ── */}
-              {activeStepIdx === 4 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl p-6"
-                  style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(16,185,129,0.2)' }}
-                >
-                  <div className="font-semibold text-[#1c1a17]/85 mb-1">Generate LinkedIn Posts</div>
-                  <div className="text-sm" style={{ color: 'rgba(90,85,80,0.7)' }}>
-                    {gapAnalysisData
-                      ? 'Gap data is ready. Use the bottom-right button to generate personalised posts.'
-                      : 'Complete gap analysis first to unlock post generation.'}
+                    The uploaded influencer PDFs, pasted influencer samples, and your own posts were used to generate the gap analysis.
                   </div>
                 </motion.div>
               )}
@@ -1063,11 +1225,10 @@ export default function StudioPage() {
                   activeStepIdx < PIPELINE_STEPS.length - 1
                     ? 'rgba(28,26,23,0.95)'
                     : 'rgba(180,160,140,0.1)',
-                border: `1px solid ${
-                  activeStepIdx < PIPELINE_STEPS.length - 1
-                    ? 'rgba(28,26,23,0.95)'
-                    : 'rgba(180,160,140,0.15)'
-                }`,
+                border: `1px solid ${activeStepIdx < PIPELINE_STEPS.length - 1
+                  ? 'rgba(28,26,23,0.95)'
+                  : 'rgba(180,160,140,0.15)'
+                  }`,
                 color: activeStepIdx < PIPELINE_STEPS.length - 1 ? '#faf7f2' : 'rgba(90,85,80,0.55)',
                 boxShadow: 'none',
               }}

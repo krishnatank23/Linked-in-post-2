@@ -18,7 +18,7 @@ from scheduling_utils import pick_posting_schedule, normalize_posting_time_utc
 
 class PipelineState(TypedDict):
     """State passed through the LangGraph pipeline."""
-    resume_path: str
+    resume_path: str | list[str]
     user_email: Optional[str]
     user_id: Optional[int]
     agent_results: list[dict[str, Any]]
@@ -31,7 +31,9 @@ class PipelineState(TypedDict):
 
 async def resume_parser_node(state: PipelineState) -> PipelineState:
     """Node 1: Parse resume and extract structured data."""
+    print(f"[DEBUG] Workflow: Starting Resume Parser node...")
     result = await run_resume_parser(state["resume_path"])
+    print(f"[DEBUG] Workflow: Resume Parser completed with status: {result.get('status')}")
 
     agent_result = {
         "agent_name": "Resume Parser Agent",
@@ -54,6 +56,7 @@ async def resume_parser_node(state: PipelineState) -> PipelineState:
 
 async def brand_voice_node(state: PipelineState) -> PipelineState:
     """Node 2: Generate brand voice and persona from parsed profile."""
+    print(f"[DEBUG] Workflow: Starting Brand Voice node...")
     if state["parsed_profile"] is None:
         agent_result = {
             "agent_name": "Brand Voice & Persona Agent",
@@ -64,6 +67,7 @@ async def brand_voice_node(state: PipelineState) -> PipelineState:
         }
     else:
         result = await run_brand_voice_agent(state["parsed_profile"])
+        print(f"[DEBUG] Workflow: Brand Voice Agent completed with status: {result.get('status')}")
         agent_result = {
             "agent_name": "Brand Voice & Persona Agent",
             "agent_description": "Generates your professional identity, brand voice, and personal summary based on your profile",
@@ -82,6 +86,7 @@ async def brand_voice_node(state: PipelineState) -> PipelineState:
 
 
 async def influence_scout_node(state: PipelineState) -> PipelineState:
+    print(f"[DEBUG] Workflow: Starting Influencer Scout node...")
     """Node 3: Identify influencers and idols based on profile and brand voice."""
     if state["parsed_profile"] is None or state["brand_voice"] is None:
         agent_result = {
@@ -377,7 +382,7 @@ def build_pipeline() -> StateGraph:
     return workflow.compile()
 
 
-async def run_pipeline(resume_path: str, user_email: str = None) -> list[dict[str, Any]]:
+async def run_pipeline(resume_path: str | list[str], user_email: str = None) -> list[dict[str, Any]]:
     """Run the full pipeline and return per-agent results."""
     pipeline = build_pipeline()
 

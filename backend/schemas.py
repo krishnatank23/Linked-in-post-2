@@ -60,6 +60,7 @@ class PipelineResponse(BaseModel):
 class GapAnalysisRequest(BaseModel):
     user_id: int
     influencer_data: dict | list[dict]
+    user_past_posts: Optional[str] = None
 
 
 class GapAnalysisResponse(BaseModel):
@@ -70,6 +71,7 @@ class GapAnalysisResponse(BaseModel):
 class GeneratePostsRequest(BaseModel):
     user_id: int
     gap_analysis_data: dict
+    user_past_posts: Optional[str] = None
 
 
 class SendReminderRequest(BaseModel):

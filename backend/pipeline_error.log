@@ -197,3 +197,91 @@ Traceback (most recent call last):
     raise ValueError(f"'{node}' is already being used as a state key")
 ValueError: 'brand_voice' is already being used as a state key
 
+
+--- ERROR at 2026-04-30 15:33:45.376136 ---
+Error in pipeline: cannot access local variable 'result' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\routes\pipeline.py", line 355, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(document_input, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\asyncio\tasks.py", line 488, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\agents\workflow.py", line 401, in run_pipeline
+    final_state = await pipeline.ainvoke(initial_state)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\__init__.py", line 2850, in ainvoke
+    async for chunk in self.astream(
+    ...<13 lines>...
+            chunks.append(chunk)
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\__init__.py", line 2732, in astream
+    async for _ in runner.atick(
+    ...<7 lines>...
+            yield o
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\runner.py", line 283, in atick
+    await arun_with_retry(
+    ...<16 lines>...
+    )
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\retry.py", line 128, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\utils\runnable.py", line 672, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step.ainvoke(input, config, **kwargs), context=context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\utils\runnable.py", line 440, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\agents\workflow.py", line 69, in brand_voice_node
+    print(f"[DEBUG] Workflow: Brand Voice Agent completed with status: {result.get('status')}")
+                                                                        ^^^^^^
+UnboundLocalError: cannot access local variable 'result' where it is not associated with a value
+During task with name 'brand_voice_node' and id 'dab773e1-137d-2cc9-180b-8ee0d4689928'
+
+
+--- ERROR at 2026-04-30 15:34:30.171127 ---
+Error in pipeline: cannot access local variable 'result' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\routes\pipeline.py", line 355, in run_agent_pipeline
+    agent_results = await asyncio.wait_for(run_pipeline(document_input, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\asyncio\tasks.py", line 488, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\agents\workflow.py", line 401, in run_pipeline
+    final_state = await pipeline.ainvoke(initial_state)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\__init__.py", line 2850, in ainvoke
+    async for chunk in self.astream(
+    ...<13 lines>...
+            chunks.append(chunk)
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\__init__.py", line 2732, in astream
+    async for _ in runner.atick(
+    ...<7 lines>...
+            yield o
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\runner.py", line 283, in atick
+    await arun_with_retry(
+    ...<16 lines>...
+    )
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\retry.py", line 128, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\utils\runnable.py", line 672, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step.ainvoke(input, config, **kwargs), context=context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Krishna Tank\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\utils\runnable.py", line 440, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Krishna Tank\OneDrive - World Goods Market Limited\vscode backup\vs_code\Linked-in-post-2\backend\agents\workflow.py", line 69, in brand_voice_node
+    print(f"[DEBUG] Workflow: Brand Voice Agent completed with status: {result.get('status')}")
+                                                                        ^^^^^^
+UnboundLocalError: cannot access local variable 'result' where it is not associated with a value
+During task with name 'brand_voice_node' and id 'f0cfb07a-e529-c3e9-3449-28a4a2cbf03a'
+

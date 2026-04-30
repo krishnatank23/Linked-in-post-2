@@ -23,19 +23,31 @@ const iconWrap: React.CSSProperties = {
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ email: '', username: '', password: '' });
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    setFile(acceptedFiles[0] || null);
+    if (!acceptedFiles.length) return;
+    setFiles((prev) => {
+      const existing = new Set(prev.map((item) => `${item.name}-${item.size}`));
+      const next = [...prev];
+      for (const candidate of acceptedFiles) {
+        const key = `${candidate.name}-${candidate.size}`;
+        if (!existing.has(key)) {
+          next.push(candidate);
+          existing.add(key);
+        }
+      }
+      return next.slice(0, 10);
+    });
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    multiple: false,
+    multiple: true,
     accept: {
       'application/pdf': ['.pdf'],
       'application/msword': ['.doc'],
@@ -53,13 +65,13 @@ export default function SignupPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!file) { toast.error('Please upload your resume.'); return; }
+    if (!files.length) { toast.error('Please upload at least one document.'); return; }
 
     const payload = new FormData();
     payload.append('email', formData.email);
     payload.append('username', formData.username);
     payload.append('password', formData.password);
-    payload.append('resume', file);
+    files.forEach((doc) => payload.append('documents', doc));
 
     try {
       setLoading(true);
@@ -83,7 +95,7 @@ export default function SignupPage() {
 
   const steps = [
     { num: 1, label: 'Account', icon: User },
-    { num: 2, label: 'Resume', icon: Upload },
+    { num: 2, label: 'Documents', icon: Upload },
   ];
 
   return (
@@ -109,7 +121,7 @@ export default function SignupPage() {
             Create your account
           </h1>
           <p style={{ color: 'var(--text-mid)', margin: 0, fontSize: '16px' }}>
-            Upload your resume and launch the AI pipeline.
+            Upload resume + profile documents and launch the AI pipeline.
           </p>
         </div>
 
@@ -247,37 +259,56 @@ export default function SignupPage() {
                     <Upload size={26} color="var(--terracotta)" />
                   </div>
                   <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-dark)', marginBottom: '8px' }}>
-                    Drop your resume here
+                    Drop your documents here
                   </div>
                   <p style={{ color: 'var(--text-mid)', fontSize: '14px', margin: 0 }}>
-                    PDF, DOC, or DOCX — the AI will parse your experience.
+                    PDF, DOC, or DOCX. Add resume + LinkedIn profile PDFs for richer brand voice.
                   </p>
                 </div>
 
-                {file && (
+                {files.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '12px', padding: '14px',
+                      padding: '14px',
                       background: 'var(--sage-light)',
                       border: '1px solid var(--sage)', borderRadius: '12px',
+                      display: 'flex', flexDirection: 'column', gap: '10px',
                     }}
                   >
-                    <div style={{
-                      width: '38px', height: '38px', borderRadius: '10px',
-                      background: 'rgba(255,255,255,0.5)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
-                      <CheckCircle2 size={20} color="var(--sage)" />
+                    {files.map((doc, idx) => (
+                      <div
+                        key={`${doc.name}-${doc.size}-${idx}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '12px',
+                          background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(180,160,140,0.2)',
+                          borderRadius: '10px', padding: '10px',
+                        }}
+                      >
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '10px',
+                          background: 'rgba(255,255,255,0.5)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          <CheckCircle2 size={18} color="var(--sage)" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-dark)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-mid)', marginTop: '2px' }}>{(doc.size / 1024 / 1024).toFixed(2)} MB</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-mid)', fontSize: '13px', fontWeight: 600 }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: '12px', color: 'var(--text-mid)' }}>
+                      {files.length} document{files.length > 1 ? 's' : ''} selected (max 10).
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-dark)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-mid)', marginTop: '2px' }}>{(file.size / 1024 / 1024).toFixed(2)} MB</div>
-                    </div>
-                    <button type="button" onClick={() => setFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-mid)', fontSize: '13px', fontWeight: 600 }}>
-                      Remove
-                    </button>
                   </motion.div>
                 )}
 
@@ -292,7 +323,7 @@ export default function SignupPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || !file}
+                    disabled={loading || !files.length}
                     className="btn-primary"
                     style={{ flex: 2, padding: '14px' }}
                   >

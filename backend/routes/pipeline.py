@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi import UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
 import asyncio
+import json
 import os
 import traceback
+from io import BytesIO
 
 from database import get_db
 from models import User, AgentOutput, LinkedInPost
@@ -20,10 +23,11 @@ from agents.runtime_status import get_status, clear_status
 from env_config import load_backend_env
 from path_resolver import resolve_resume_path, to_portable_resume_path
 from scheduling_utils import pick_posting_schedule, normalize_posting_time_utc
+from PyPDF2 import PdfReader
 
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
-PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "600"))
+PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "1200"))
 
 
 def _ensure_openai_key() -> None:
@@ -52,6 +56,36 @@ def _normalize_selected_influencers(raw_influencer_data: dict | list[dict] | Non
         if influencer_title and "linkedin.com" in influencer_link:
             valid_influencers.append(influencer)
     return valid_influencers
+
+
+def _decode_resume_path_payload(raw_resume_path: str) -> list[str]:
+    """Decode persisted resume_path string into one or many stored document paths."""
+    raw = str(raw_resume_path or "").strip()
+    if not raw:
+        return []
+
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item or "").strip()]
+        except Exception:
+            pass
+
+    return [raw]
+
+
+def _resolve_resume_paths(raw_resume_path: str) -> list[str]:
+    """Resolve one or many stored document paths to local absolute paths."""
+    persisted_paths = _decode_resume_path_payload(raw_resume_path)
+    if not persisted_paths:
+        raise FileNotFoundError("Resume path is empty")
+    return [resolve_resume_path(path) for path in persisted_paths]
+
+
+def _portable_resume_path_payload(resolved_paths: list[str]) -> str:
+    portable_paths = [to_portable_resume_path(path) for path in resolved_paths]
+    return json.dumps(portable_paths) if len(portable_paths) > 1 else portable_paths[0]
 
 
 async def _get_latest_influencer_candidates(db: AsyncSession, user_id: int) -> list[dict]:
@@ -162,6 +196,35 @@ def _unique_keep_order(items: list[str]) -> list[str]:
     return unique
 
 
+async def _extract_text_from_upload(upload: UploadFile | None) -> str:
+    """Extract text from an uploaded PDF or plain-text fallback."""
+    if upload is None:
+        return ""
+
+    raw_bytes = await upload.read()
+    if not raw_bytes:
+        return ""
+
+    filename = str(upload.filename or "").lower()
+    if filename.endswith(".pdf"):
+        try:
+            reader = PdfReader(BytesIO(raw_bytes))
+            text_parts = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            return "\n".join(text_parts).strip()
+        except Exception as exc:
+            print(f"[GAP ANALYSIS] Failed to read PDF upload {upload.filename}: {exc}")
+            return ""
+
+    try:
+        return raw_bytes.decode("utf-8", errors="ignore").strip()
+    except Exception:
+        return ""
+
+
 def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
     """Build a combined summary across all selected influencers."""
     profile_gaps = []
@@ -258,19 +321,19 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
         raise HTTPException(status_code=400, detail="No resume uploaded for this user")
 
     try:
-        resolved_resume_path = resolve_resume_path(user.resume_path)
+        resolved_resume_paths = _resolve_resume_paths(user.resume_path)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Resume file not found on this server. Please re-upload your resume from the UI "
+                "Uploaded profile document not found on this server. Please re-upload your document(s) from the UI "
                 f"and run the pipeline again. Details: {str(e)}"
             ),
         )
 
-    # One-time migration: normalize persisted path to a portable relative path.
-    portable_resume_path = to_portable_resume_path(resolved_resume_path)
-    if user.resume_path != portable_resume_path:
+    # One-time migration: normalize persisted path(s) to portable relative path payload.
+    portable_resume_path = _portable_resume_path_payload(resolved_resume_paths)
+    if str(user.resume_path) != portable_resume_path:
         user.resume_path = portable_resume_path
         await db.commit()
 
@@ -282,13 +345,14 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
 
     # Run the LangGraph pipeline with timeout protection
     try:
-        print(f"[PIPELINE] Starting pipeline for user {request.user_id} with resume: {resolved_resume_path}")
+        document_input = resolved_resume_paths if len(resolved_resume_paths) > 1 else resolved_resume_paths[0]
+        print(f"[PIPELINE] Starting pipeline for user {request.user_id} with {len(resolved_resume_paths)} document(s)")
         set_current_user_context(user.id)
         clear_status(user.id)
         
         # Timeout guard for end-to-end pipeline execution.
         try:
-            agent_results = await asyncio.wait_for(run_pipeline(resolved_resume_path, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
+            agent_results = await asyncio.wait_for(run_pipeline(document_input, user.email), timeout=PIPELINE_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             error_msg = f"Pipeline execution timed out after {PIPELINE_TIMEOUT_SECONDS} seconds. The LLM service may be slow or unavailable."
             print(f"[PIPELINE ERROR] {error_msg}")
@@ -579,6 +643,54 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
 
 
+@router.post("/pipeline/gap-analysis-context", response_model=GapAnalysisResponse)
+async def perform_gap_analysis_with_context(
+    user_id: int = Form(...),
+    selected_influencers_json: str = Form(...),
+    user_past_posts: str = Form(""),
+    profile_files: list[UploadFile] = File(default=[]),
+    db: AsyncSession = Depends(get_db),
+):
+    """Analyze selected influencers with optional uploaded PDFs and pasted post samples."""
+    try:
+        raw_selected_influencers = json.loads(selected_influencers_json)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid selected_influencers_json payload")
+
+    if isinstance(raw_selected_influencers, dict):
+        raw_selected_influencers = [raw_selected_influencers]
+    if not isinstance(raw_selected_influencers, list):
+        raise HTTPException(status_code=400, detail="Selected influencers payload must be a list")
+
+    enriched_influencers: list[dict] = []
+    normalized_user_posts = str(user_past_posts or "").strip()
+
+    for idx, influencer in enumerate(raw_selected_influencers):
+        if not isinstance(influencer, dict):
+            continue
+
+        enriched = dict(influencer)
+        enriched["user_past_posts"] = normalized_user_posts
+
+        if idx < len(profile_files):
+            profile_text = await _extract_text_from_upload(profile_files[idx])
+            if profile_text:
+                enriched["manual_profile_text"] = profile_text[:12000]
+                enriched["manual_profile_filename"] = profile_files[idx].filename
+
+        post_samples = str(enriched.get("manual_post_samples") or enriched.get("manual_posts_text") or "").strip()
+        if post_samples:
+            enriched["manual_post_samples"] = post_samples[:12000]
+
+        enriched_influencers.append(enriched)
+
+    if not enriched_influencers:
+        raise HTTPException(status_code=400, detail="Please select at least one valid influencer before running gap analysis.")
+
+    request_model = GapAnalysisRequest(user_id=user_id, influencer_data=enriched_influencers, user_past_posts=normalized_user_posts)
+    return await perform_gap_analysis(request_model, db)
+
+
 @router.post("/pipeline/generate-posts", response_model=GapAnalysisResponse)
 async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncSession = Depends(get_db)):
     """Generate posts based on an approved gap analysis strategy (no email sent here)."""
@@ -618,7 +730,7 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         results = []
         
         # Run Post Generator
-        ar_posts = await run_post_generation(profile_data, brand_voice, request.gap_analysis_data)
+        ar_posts = await run_post_generation(profile_data, brand_voice, request.gap_analysis_data, request.user_past_posts)
         
         post_agent_result = AgentResult(
             agent_name="LinkedIn Post Generator",

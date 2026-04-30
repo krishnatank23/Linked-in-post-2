@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,7 +86,8 @@ async def register(
     email: str = Form(...),
     username: str = Form(...),
     password: str = Form(...),
-    resume: UploadFile = File(...),
+    resume: UploadFile | None = File(None),
+    documents: list[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
 ):
     email = _normalize_email(email)
@@ -106,20 +108,36 @@ async def register(
         if existing_username_user and existing_email_user is None and existing_username_user.email != email:
             raise HTTPException(status_code=400, detail="Username already exists. Choose a different username.")
 
-        # Save resume file
-        file_ext = os.path.splitext(resume.filename)[1].lower()
-        if file_ext not in [".pdf", ".doc", ".docx"]:
-            raise HTTPException(status_code=400, detail="Only PDF, DOC, and DOCX files are allowed")
-
         import uuid
         unique_id = str(uuid.uuid4())
-        safe_filename = f"{unique_id}{file_ext}"
-        file_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(resume.file, buffer)
+        uploaded_docs = [doc for doc in documents if doc and doc.filename]
+        if resume and resume.filename:
+            uploaded_docs.insert(0, resume)
 
-        portable_resume_path = to_portable_resume_path(file_path)
+        if not uploaded_docs:
+            raise HTTPException(status_code=400, detail="Please upload at least one PDF, DOC, or DOCX document")
+        if len(uploaded_docs) > 10:
+            raise HTTPException(status_code=400, detail="You can upload at most 10 documents during registration")
+
+        portable_paths: list[str] = []
+        original_names: list[str] = []
+
+        for doc in uploaded_docs:
+            file_ext = os.path.splitext(doc.filename or "")[1].lower()
+            if file_ext not in [".pdf", ".doc", ".docx"]:
+                raise HTTPException(status_code=400, detail="Only PDF, DOC, and DOCX files are allowed")
+
+            safe_filename = f"{uuid.uuid4()}{file_ext}"
+            file_path = os.path.join(UPLOAD_DIR, safe_filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(doc.file, buffer)
+
+            portable_paths.append(to_portable_resume_path(file_path))
+            original_names.append(str(doc.filename))
+
+        resume_path_payload = json.dumps(portable_paths) if len(portable_paths) > 1 else portable_paths[0]
+        resume_filename_payload = original_names[0] if len(original_names) == 1 else f"{original_names[0]} (+{len(original_names) - 1} more)"
 
         # Create new user or update the existing account for this email.
         hashed_pw = pwd_context.hash(password)
@@ -127,16 +145,16 @@ async def register(
         if existing_email_user:
             existing_email_user.username = username or existing_email_user.username
             existing_email_user.hashed_password = hashed_pw
-            existing_email_user.resume_path = portable_resume_path
-            existing_email_user.resume_filename = resume.filename
+            existing_email_user.resume_path = resume_path_payload
+            existing_email_user.resume_filename = resume_filename_payload
             new_user = existing_email_user
         else:
             new_user = User(
                 email=email,
                 username=username,
                 hashed_password=hashed_pw,
-                resume_path=portable_resume_path,
-                resume_filename=resume.filename,
+                resume_path=resume_path_payload,
+                resume_filename=resume_filename_payload,
                 unique_id=unique_id,
             )
             db.add(new_user)

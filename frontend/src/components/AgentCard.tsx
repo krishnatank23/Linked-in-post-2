@@ -338,7 +338,7 @@ const AgentCard = ({ data, index }: AgentCardProps) => {
           ) : null}
           <div className="p-4 rounded-2xl bg-accent/10 border border-accent/20">
             <div className="text-xs uppercase tracking-[0.2em] text-accent mb-2">Overall Gap</div>
-            <p className="text-sm text-[#1c1a17]/75 leading-7">{overall.content_authority_gap || 'Combined gap summary generated.'}</p>
+            <p className="text-sm text-[#1c1a17]/85 leading-7 font-medium">{overall.content_authority_gap || 'Combined gap summary generated.'}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <StatCard label="Overall Gap Score" value={String(overallScores.overall_gap_score ?? 'N/A')} icon={BarChart3} />
@@ -353,7 +353,7 @@ const AgentCard = ({ data, index }: AgentCardProps) => {
             <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
               <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Recommended Posting Days</div>
               {renderList(recommendedDays, 'No day recommendations.')}
-              <p className="text-sm text-[#1c1a17]/65 leading-7 mt-3">{strategy.day_selection_rationale || 'Day recommendation is based on consistency and engagement gap.'}</p>
+              <p className="text-sm text-[#1c1a17]/75 leading-7 mt-3 font-medium">{strategy.day_selection_rationale || 'Day recommendation is based on consistency and engagement gap.'}</p>
             </div>
           ) : null}
           {actionPlan.length > 0 ? (
@@ -362,7 +362,7 @@ const AgentCard = ({ data, index }: AgentCardProps) => {
               {actionPlan.map((step: string, idx: number) => (
                 <div key={idx} className="flex items-start gap-3 p-3 rounded-2xl bg-black/5 border border-black/10">
                   <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">{idx + 1}</div>
-                  <div className="text-sm text-[#1c1a17]/70 leading-7">{step}</div>
+                  <div className="text-sm text-[#1c1a17]/80 leading-7 font-medium">{step}</div>
                 </div>
               ))}
             </div>

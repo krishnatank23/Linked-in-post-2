@@ -9,6 +9,11 @@ from agents.llm_guard import guarded_llm_ainvoke
 
 load_backend_env()
 
+
+def _get_openai_api_key() -> str | None:
+    """Support both the standard and legacy OpenAI env var names."""
+    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+
 GAP_ANALYSIS_PROMPT = """You are a senior personal branding strategist and LinkedIn content expert.
 Your goal is to analyze the gap between the user and ONE selected influencer, then produce a concrete and measurable strategy.
 
@@ -18,6 +23,13 @@ Brand Voice: {brand_voice}
 
 INFLUENCER DATA:
 {influencer_data}
+
+Optional supporting context may also be embedded in the influencer data, such as:
+- manual_profile_text: text extracted from an uploaded influencer profile PDF
+- manual_post_samples / manual_posts_text: pasted posts from that influencer
+- user_past_posts: the user's own recent posts for emotion, cadence, and voice matching
+
+When this extra context is present, use it to refine authority, tone, cadence, and emotional style comparisons.
 
 Rules:
 - Be specific and evidence-oriented, avoid generic advice.
@@ -117,9 +129,9 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
     """
     try:
         llm = ChatOpenAI(
-            model=os.getenv("GAP_ANALYZER_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
+            model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
             temperature=0.4,
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=_get_openai_api_key(),
         )
         
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)

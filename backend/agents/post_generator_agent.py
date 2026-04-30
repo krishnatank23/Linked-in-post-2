@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import traceback
 from typing import Any
 from langchain_openai import ChatOpenAI
@@ -8,6 +9,11 @@ from env_config import load_backend_env
 from agents.llm_guard import guarded_llm_ainvoke, _current_user_id
 
 load_backend_env()
+
+
+def _get_openai_api_key() -> str | None:
+    """Support both the standard and legacy OpenAI env var names."""
+    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
 
 POST_GENERATION_PROMPT = """You are a world-class LinkedIn ghostwriter and content strategist with expertise in professional, high-impact domain content.
 
@@ -21,6 +27,12 @@ BRAND VOICE:
 
 GAP ANALYSIS & STRATEGY:
 {gap_analysis}
+
+USER PAST POSTS (FOR EMOTION AND VOICE MATCHING):
+{user_past_posts}
+
+EXTRACTED VOICE & EMOTION SIGNATURE (USE THIS AS A HARD STYLE CONSTRAINT):
+{voice_emotion_signature}
 
 PREVIOUSLY GENERATED POSTS (STRICT AVOIDANCE):
 {previous_posts}
@@ -91,6 +103,8 @@ DAY & REMINDER STRATEGY RULES (MANDATORY):
 
 HUMANIZATION & QUALITY RULES (CRITICAL):
 
+- Treat EXTRACTED VOICE & EMOTION SIGNATURE as the primary style guide.
+- Analyze the USER PAST POSTS (if provided) and strictly match the emotion, cadence, sentence structure, and specific vocabulary/phrases the user uses. Maintain their exact authentic voice.
 - Write like a human having a smart conversation with peers
 - Vary sentence structure: Mix short punchy sentences with longer detailed ones
 - DO NOT use buzzwords: 'leverage', 'streamline', 'delve', 'tapestry', 'unleash', 'empower'
@@ -151,10 +165,60 @@ Return ONLY valid JSON. No markdown, no explanations, no code fences.
 """
 
 
+VOICE_EMOTION_EXTRACTION_PROMPT = """You are a precise writing-style analyst.
+
+Analyze the user's recent LinkedIn posts and extract a reusable style signature.
+
+USER POSTS:
+{user_past_posts}
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "primary_tone": "...",
+  "secondary_tone": "...",
+  "dominant_emotions": ["...", "..."],
+  "sentence_rhythm": "short|mixed|long",
+  "hook_pattern": "how the user tends to open posts",
+  "cta_pattern": "how the user tends to end posts",
+  "vocabulary_markers": ["word/phrase", "word/phrase"],
+  "authenticity_markers": ["style trait", "style trait"],
+  "do_not_change": ["style element to preserve", "style element to preserve"]
+}}
+"""
+
+
+def _prepare_recent_posts(user_past_posts: str | None) -> dict[str, Any]:
+    """Normalize manual pasted posts and limit to last 10 items."""
+    if not user_past_posts or not user_past_posts.strip():
+        return {
+            "count": 0,
+            "posts": [],
+            "formatted": "None provided.",
+        }
+
+    raw = user_past_posts.strip()
+    chunks = [p.strip() for p in re.split(r"\n\s*\n+", raw) if p.strip()]
+
+    # If user pasted line-separated short posts instead of paragraph blocks.
+    if len(chunks) <= 1:
+        line_posts = [ln.strip("-* \t") for ln in raw.splitlines() if ln.strip()]
+        if len(line_posts) > 1:
+            chunks = line_posts
+
+    posts = chunks[:10]
+    formatted = "\n\n".join([f"Post {idx + 1}:\n{text}" for idx, text in enumerate(posts)])
+
+    return {
+        "count": len(posts),
+        "posts": posts,
+        "formatted": formatted if formatted else "None provided.",
+    }
 
 
 
-async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict) -> dict[str, Any]:
+
+
+async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict, user_past_posts: str | None = None) -> dict[str, Any]:
     """
     Agent 5: Generate EXACTLY 2 unique LinkedIn posts based on gap analysis and brand voice.
     Autonomously decides topics and ensures complete variation from previous posts.
@@ -200,10 +264,55 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_types_text = "None"
         
         llm = ChatOpenAI(
-            model=os.getenv("POST_GENERATOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
+            model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
             temperature=0.8,  # Slightly higher for more creative autonomy
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=_get_openai_api_key(),
         )
+
+        # First extract a deterministic voice/emotion signature from pasted posts.
+        normalized_past_posts = _prepare_recent_posts(user_past_posts)
+        voice_emotion_signature: dict[str, Any] = {
+            "primary_tone": "Professional",
+            "secondary_tone": "Conversational",
+            "dominant_emotions": ["confident", "helpful"],
+            "sentence_rhythm": "mixed",
+            "hook_pattern": "Clear problem statement",
+            "cta_pattern": "Open-ended professional question",
+            "vocabulary_markers": [],
+            "authenticity_markers": ["plain language"],
+            "do_not_change": ["direct tone", "human readability"],
+            "source": "default_fallback_no_posts",
+        }
+
+        if normalized_past_posts["count"] > 0:
+            try:
+                extractor_llm = ChatOpenAI(
+                    model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
+                    temperature=0.2,
+                    api_key=_get_openai_api_key(),
+                )
+                extractor_prompt = ChatPromptTemplate.from_template(VOICE_EMOTION_EXTRACTION_PROMPT)
+                extractor_chain = extractor_prompt | extractor_llm
+                extractor_response = await guarded_llm_ainvoke(
+                    extractor_chain,
+                    {"user_past_posts": normalized_past_posts["formatted"]},
+                    timeout_seconds=45,
+                )
+
+                signature_content = extractor_response.content.strip()
+                if signature_content.startswith("```"):
+                    signature_content = signature_content.split("\n", 1)[1] if "\n" in signature_content else signature_content[3:]
+                if signature_content.endswith("```"):
+                    signature_content = signature_content[:-3]
+                signature_content = signature_content.strip()
+                if signature_content.startswith("json"):
+                    signature_content = signature_content[4:].strip()
+
+                parsed_signature = json.loads(signature_content)
+                if isinstance(parsed_signature, dict):
+                    voice_emotion_signature = {**parsed_signature, "source": "user_past_posts"}
+            except Exception as extraction_error:
+                print(f"[POST GENERATOR] Voice/emotion extraction fallback used: {extraction_error}")
         
         prompt = ChatPromptTemplate.from_template(POST_GENERATION_PROMPT)
         chain = prompt | llm
@@ -214,6 +323,8 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                 "user_profile": json.dumps(user_profile, indent=2),
                 "brand_voice": json.dumps(brand_voice, indent=2),
                 "gap_analysis": json.dumps(gap_analysis, indent=2),
+                "user_past_posts": normalized_past_posts["formatted"],
+                "voice_emotion_signature": json.dumps(voice_emotion_signature, indent=2),
                 "previous_posts": previous_posts_text,
                 "previous_types": previous_types_text,
             },
@@ -231,6 +342,9 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             content = content[4:].strip()
             
         post_results = json.loads(content)
+        if isinstance(post_results, dict):
+            post_results["voice_emotion_analysis"] = voice_emotion_signature
+            post_results["user_past_posts_used_count"] = normalized_past_posts["count"]
         
         # Validate that we got exactly 2 posts
         posts = post_results.get("posts", [])
@@ -242,7 +356,11 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                 # If only 1 post, duplicate with variation instruction not ideal, but keep as is
                 pass
         
-        print(f"[POST GENERATOR] Generated {len(post_results.get('posts', []))} posts with types: {[p.get('type') for p in post_results.get('posts', [])]}")
+        print(
+            f"[POST GENERATOR] Generated {len(post_results.get('posts', []))} posts with types: "
+            f"{[p.get('type') for p in post_results.get('posts', [])]} | "
+            f"voice posts used: {normalized_past_posts['count']}"
+        )
         
         return {
             "status": "success",

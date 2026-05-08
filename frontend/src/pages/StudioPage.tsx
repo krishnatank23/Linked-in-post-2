@@ -1092,52 +1092,7 @@ export default function StudioPage() {
                     </div>
                   ) : null}
 
-                  <div className="mt-5 rounded-2xl p-4 md:p-5" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(180,160,140,0.2)' }}>
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
-                      <div>
-                        <div className="font-semibold text-[#1c1a17]/85">Scrape selected LinkedIn URL</div>
-                        <div className="text-xs mt-1" style={{ color: 'rgba(90,85,80,0.7)' }}>
-                          Uses the selected profile URL and sends it to your PhantomBuster endpoint.
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => { void scrapeSelectedUrl(); }}
-                        disabled={scrapingPosts || !scrapeTargetUrl.trim()}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed"
-                        style={{
-                          background: scrapingPosts ? 'rgba(201,113,79,0.14)' : '#1c1a17',
-                          color: '#faf7f2',
-                          border: '1px solid rgba(180,160,140,0.25)',
-                          opacity: scrapingPosts ? 0.8 : 1,
-                        }}
-                      >
-                        {scrapingPosts ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                        {scrapingPosts ? 'Scraping…' : 'Scrape URL'}
-                      </button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <input
-                        value={scrapeTargetUrl}
-                        onChange={(e) => setScrapeTargetUrl(e.target.value)}
-                        placeholder="Selected LinkedIn URL"
-                        className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-                        style={{ background: 'rgba(180,160,140,0.1)', border: '1px solid rgba(180,160,140,0.2)', color: 'rgba(28,26,23,0.98)' }}
-                      />
-                      <input
-                        value={phantombusterUrl}
-                        onChange={(e) => setPhantombusterUrl(e.target.value)}
-                        placeholder="PhantomBuster URL or webhook (optional)"
-                        className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-                        style={{ background: 'rgba(180,160,140,0.1)', border: '1px solid rgba(180,160,140,0.2)', color: 'rgba(28,26,23,0.98)' }}
-                      />
-                    </div>
-
-                    <div className="text-[11px] mt-3" style={{ color: 'rgba(90,85,80,0.6)' }}>
-                      If the PhantomBuster field is empty, the backend uses PHANTOMBUSTER_SCRAPER_URL or PHANTOMBUSTER_WEBHOOK_URL from backend/.env.
-                    </div>
-                  </div>
+                  {/* Scrape URL UI removed */}
                 </motion.div>
               )}
 

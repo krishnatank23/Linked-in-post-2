@@ -131,10 +131,6 @@ export default function StudioPage() {
   const [selectedInfluencerDrafts, setSelectedInfluencerDrafts] = useState<Record<string, InfluencerAnalysisDraft>>({});
   const [gapAnalysisData, setGapAnalysisData] = useState<any | null>(null);
   const [postResults, setPostResults] = useState<any[]>([]);
-  const [scrapedInfluencerData, setScrapedInfluencerData] = useState<any | null>(null);
-  const [scrapeTargetUrl, setScrapeTargetUrl] = useState('');
-  const [phantombusterUrl, setPhantombusterUrl] = useState('');
-  const [scrapingPosts, setScrapingPosts] = useState(false);
   const [pastPostsInput, setPastPostsInput] = useState('');
 
   /* UI */
@@ -161,12 +157,6 @@ export default function StudioPage() {
     };
     void load();
   }, [user]);
-
-  useEffect(() => {
-    if (selectedInfluencers.length > 0) {
-      setScrapeTargetUrl(selectedInfluencers[0].link || '');
-    }
-  }, [selectedInfluencers]);
 
   useEffect(() => {
     setSelectedInfluencerDrafts((prev) => {
@@ -251,8 +241,7 @@ export default function StudioPage() {
     setLiveStatus('Starting pipeline…');
     setProgress(5);
     setResults([]); setInfluencers([]); setSelectedInfluencers([]);
-    setGapAnalysisData(null); setPostResults([]); setScrapedInfluencerData(null);
-    setScrapeTargetUrl(''); setPhantombusterUrl('');
+    setGapAnalysisData(null); setPostResults([]);
     setRunningStepIdx(0); setActiveStepIdx(0);
     try {
       const res = await api.post('/pipeline/run', { user_id: user.id });
@@ -295,14 +284,13 @@ export default function StudioPage() {
   };
 
   const runGapAnalysis = async (): Promise<boolean> => {
-    if (!user || (selectedInfluencers.length === 0 && !scrapedInfluencerData)) {
-      toast.error('Select or scrape at least one LinkedIn URL first.');
+    if (!user || selectedInfluencers.length === 0) {
+      toast.error('Select at least one LinkedIn URL first.');
       return false;
     }
     setRunningGap(true);
     try {
-      const influencerData = scrapedInfluencerData ? [scrapedInfluencerData] : selectedInfluencers;
-      const analyzedInfluencers = influencerData.map((influencer, idx) => {
+      const analyzedInfluencers = selectedInfluencers.map((influencer, idx) => {
         const key = getInfluencerKey(influencer);
         const draft = selectedInfluencerDrafts[key];
         const manualPosts = String(draft?.manualPosts || '').trim();
@@ -340,48 +328,6 @@ export default function StudioPage() {
       toast.error(err.response?.data?.detail || 'Gap analysis failed.');
       return false;
     } finally { setRunningGap(false); }
-  };
-
-  const scrapeSelectedUrl = async (): Promise<boolean> => {
-    if (!user || !scrapeTargetUrl.trim()) {
-      toast.error('Select or enter a LinkedIn URL first.');
-      return false;
-    }
-
-    setScrapingPosts(true);
-    try {
-      const payload: any = {
-        user_id: user.id,
-        selected_url: scrapeTargetUrl.trim(),
-      };
-
-      if (phantombusterUrl.trim()) {
-        payload.phantombuster_url = phantombusterUrl.trim();
-      }
-
-      const res = await api.post('/pipeline/scrape-linkedin-posts', payload);
-      const next = res.data.results || [];
-      const scrape = next.find((r: any) => r.agent_name?.includes('Scraper')) || next[0];
-      const scrapedOutput = scrape?.output || null;
-
-      if (scrapedOutput) {
-        setScrapedInfluencerData({
-          ...(selectedInfluencers[0] || {}),
-          link: scrapedOutput.selected_url || scrapeTargetUrl.trim(),
-          scraped_posts: scrapedOutput.scrape_response,
-          scraped_source: scrapedOutput.phantombuster_url,
-        });
-      }
-
-      setResults(prev => [...prev, ...next]);
-      toast.success('LinkedIn URL scraped successfully.');
-      return true;
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'LinkedIn scraping failed.');
-      return false;
-    } finally {
-      setScrapingPosts(false);
-    }
   };
 
   const generatePosts = async (): Promise<boolean> => {
@@ -477,7 +423,7 @@ export default function StudioPage() {
             : 'Done';
   const nextButtonDisabled =
     activeStepIdx === 2
-      ? runningGap || (selectedInfluencers.length === 0 && !scrapedInfluencerData)
+      ? runningGap || selectedInfluencers.length === 0
       : activeStepIdx === 3
         ? generatingPosts || !gapAnalysisData
         : activeStepIdx === 4

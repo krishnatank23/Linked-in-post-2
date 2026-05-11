@@ -18,6 +18,8 @@ class User(Base):
     # Persistent cache so early agent outputs can be revisited without rerunning everything.
     parsed_profile_cache = Column(JSON, nullable=True)
     brand_voice_cache = Column(JSON, nullable=True)
+    influencer_scout_cache = Column(JSON, nullable=True)
+    selected_influencer_cache = Column(JSON, nullable=True)
     cache_updated_at = Column(DateTime, nullable=True)
     
     # Automated Posting Schedule

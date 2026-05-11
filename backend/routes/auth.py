@@ -13,6 +13,7 @@ from database import get_db
 from models import User
 from schemas import LoginRequest, LoginResponse, RegisterResponse, UserInfo
 from path_resolver import to_portable_resume_path
+from user_state_markdown import write_user_state_markdown, delete_user_state_markdown
 
 try:
     import bcrypt as bcrypt_lib
@@ -161,6 +162,7 @@ async def register(
 
         await db.commit()
         await db.refresh(new_user)
+        write_user_state_markdown(new_user)
 
         return RegisterResponse(
             message="Registration successful" if not existing_email_user else "Account updated successfully",
@@ -194,6 +196,7 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid password")
 
     token = create_access_token({"sub": str(user.id), "email": user.email})
+    write_user_state_markdown(user)
 
     return LoginResponse(
         access_token=token,
@@ -210,3 +213,23 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserInfo.model_validate(user)
+
+
+@router.delete("/user/{user_id}/state")
+async def reset_user_state(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.parsed_profile_cache = None
+    user.brand_voice_cache = None
+    user.influencer_scout_cache = None
+    user.selected_influencer_cache = None
+    user.cache_updated_at = None
+    user.posting_schedule = None
+    user.posting_time_utc = None
+    user.last_automated_post_at = None
+    await db.commit()
+    delete_user_state_markdown(user)
+    return {"message": "User state reset successfully"}

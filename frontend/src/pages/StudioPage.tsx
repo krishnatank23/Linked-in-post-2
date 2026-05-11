@@ -191,6 +191,51 @@ export default function StudioPage() {
     return () => { if (interval) window.clearInterval(interval); };
   }, [loadingPipeline, user]);
 
+  const cachedResumeResult = useMemo(() => {
+    if (!user?.parsed_profile_cache) return null;
+    return {
+      agent_name: 'Resume Parser Agent',
+      agent_description: 'Extracts personal info, experience, skills, education, and all details from your resume using AI',
+      status: 'success',
+      output: { parsed_profile: user.parsed_profile_cache },
+      error: null,
+      is_saved: false,
+    };
+  }, [user?.parsed_profile_cache]);
+
+  const cachedBrandResult = useMemo(() => {
+    if (!user?.brand_voice_cache) return null;
+    return {
+      agent_name: 'Brand Voice & Persona Agent',
+      agent_description: 'Generates your professional identity, brand voice, and personal summary based on your profile',
+      status: 'success',
+      output: { brand_analysis: user.brand_voice_cache },
+      error: null,
+      is_saved: false,
+    };
+  }, [user?.brand_voice_cache]);
+
+  const cachedInfluencerResult = useMemo(() => {
+    if (!user?.influencer_scout_cache) return null;
+    return {
+      agent_name: 'Influence & Idol Scout Agent',
+      agent_description: 'Finds your industry idols and top LinkedIn influencers matching your professional domain',
+      status: 'success',
+      output: user.influencer_scout_cache,
+      error: null,
+      is_saved: false,
+    };
+  }, [user?.influencer_scout_cache]);
+
+  const getLatestResult = (agentNeedle: string) => {
+    const liveResult = [...results].reverse().find((r) => String(r.agent_name || '').includes(agentNeedle)) || null;
+    if (liveResult) return liveResult;
+    if (agentNeedle.includes('Resume')) return cachedResumeResult;
+    if (agentNeedle.includes('Brand Voice')) return cachedBrandResult;
+    if (agentNeedle.includes('Influence')) return cachedInfluencerResult;
+    return null;
+  };
+
   /* step statuses */
   const stepStatuses = useMemo((): StepStatus[] => {
     return PIPELINE_STEPS.map((_, idx) => {
@@ -199,26 +244,26 @@ export default function StudioPage() {
         if (idx === runningStepIdx) return 'running';
         return 'idle';
       }
-      if (idx === 0) return results.some(r => String(r.agent_name || '').includes('Resume')) ? 'complete' : 'idle';
-      if (idx === 1) return results.some(r => String(r.agent_name || '').includes('Brand Voice')) ? 'complete' : 'idle';
-      if (idx === 2) return results.some(r => String(r.agent_name || '').includes('Influence')) ? 'complete' : 'idle';
+      if (idx === 0) return getLatestResult('Resume Parser') ? 'complete' : 'idle';
+      if (idx === 1) return getLatestResult('Brand Voice') ? 'complete' : 'idle';
+      if (idx === 2) return getLatestResult('Influence') ? 'complete' : 'idle';
       if (idx === 3) return gapAnalysisData ? 'complete' : 'idle';
       if (idx === 4) return postResults.length > 0 ? 'complete' : 'idle';
       if (idx === 5) return results.some(r => String(r.agent_name || '').includes('Post Delivery')) ? 'complete' : 'idle';
       return 'idle';
     });
-  }, [results, loadingPipeline, runningStepIdx, gapAnalysisData, postResults]);
+  }, [results, loadingPipeline, runningStepIdx, gapAnalysisData, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
 
   /* active result for display */
   const activeResult = useMemo(() => {
-    if (activeStepIdx === 0) return results.find(r => String(r.agent_name || '').includes('Resume')) || null;
-    if (activeStepIdx === 1) return results.find(r => String(r.agent_name || '').includes('Brand Voice')) || null;
-    if (activeStepIdx === 2) return results.find(r => String(r.agent_name || '').includes('Influence')) || null;
+    if (activeStepIdx === 0) return getLatestResult('Resume Parser');
+    if (activeStepIdx === 1) return getLatestResult('Brand Voice');
+    if (activeStepIdx === 2) return getLatestResult('Influence');
     if (activeStepIdx === 3) return results.find(r => String(r.agent_name || '').includes('Gap Analysis')) || null;
     if (activeStepIdx === 4) return postResults[postResults.length - 1] || results.find(r => String(r.agent_name || '').includes('Post Generator')) || null;
     if (activeStepIdx === 5) return results.find(r => String(r.agent_name || '').includes('Post Delivery')) || null;
     return null;
-  }, [activeStepIdx, results, postResults]);
+  }, [activeStepIdx, results, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
 
   const latestGeneratedPostOutput = useMemo(() => {
     const r = [...postResults].reverse().find(r => String(r.agent_name || '').includes('Post Generator'));
@@ -234,31 +279,110 @@ export default function StudioPage() {
     return lines.length > 1 ? lines.length : 1;
   }, [pastPostsInput]);
 
+  const pipelineStage = useMemo(() => {
+    if (!getLatestResult('Resume Parser')) return 'resume_parser';
+    if (!getLatestResult('Brand Voice')) return 'brand_voice';
+    if (!getLatestResult('Influence')) return 'influencer';
+    return 'done';
+  }, [results, user?.parsed_profile_cache, user?.brand_voice_cache, user?.influencer_scout_cache]);
+
+  const refreshPipelineResults = async () => {
+    const refreshed = await api.get(`/pipeline/results/${user?.id}`);
+    const all = refreshed.data.results || [];
+    setResults(all);
+    const latestInfluence = [...all].reverse().find((r: any) => String(r.agent_name || '').includes('Influence'));
+    const cachedInfluencers = user?.influencer_scout_cache?.influencers || [];
+    setInfluencers(latestInfluence?.output?.influencers || cachedInfluencers);
+    return all;
+  };
+
+  const resetDownstreamState = (stage: 'resume_parser' | 'brand_voice' | 'influencer') => {
+    setSelectedInfluencers([]);
+    setSelectedInfluencerDrafts({});
+    setGapAnalysisData(null);
+    setPostResults([]);
+
+    if (stage === 'resume_parser') {
+      setInfluencers([]);
+    }
+  };
+
   /* actions */
   const runPipeline = async () => {
     if (!user) return;
-    setLoadingPipeline(true);
-    setLiveStatus('Starting pipeline…');
-    setProgress(5);
-    setResults([]); setInfluencers([]); setSelectedInfluencers([]);
-    setGapAnalysisData(null); setPostResults([]);
-    setRunningStepIdx(0); setActiveStepIdx(0);
-    try {
-      const res = await api.post('/pipeline/run', { user_id: user.id });
-      const all = res.data.results || [];
-      setResults(all);
-      const inf = all.find((r: any) => r.agent_name?.includes('Influence'));
-      setInfluencers(inf?.output?.influencers || []);
-      setProgress(100);
+    if (pipelineStage === 'done') {
+      toast.success('Resume parser, brand voice, and influencer stages are already complete.');
       setActiveStepIdx(2);
-      toast.success('Pipeline complete — select influencers to continue.');
+      return;
+    }
+
+    const stageToRun = pipelineStage;
+
+    await runPipelineStage(stageToRun);
+  };
+
+  const runPipelineStage = async (stageToRun: 'resume_parser' | 'brand_voice' | 'influencer') => {
+    if (!user) return;
+
+    setLoadingPipeline(true);
+    setLiveStatus(
+      stageToRun === 'resume_parser'
+        ? 'Running resume parser…'
+        : stageToRun === 'brand_voice'
+          ? 'Running brand voice…'
+          : 'Running influencer scout…'
+    );
+    setProgress(stageToRun === 'resume_parser' ? 15 : stageToRun === 'brand_voice' ? 55 : 80);
+    setRunningStepIdx(stageToRun === 'resume_parser' ? 0 : stageToRun === 'brand_voice' ? 1 : 2);
+    setActiveStepIdx(stageToRun === 'resume_parser' ? 0 : stageToRun === 'brand_voice' ? 1 : 2);
+    try {
+      await api.post('/pipeline/run-stage', { user_id: user.id, stage: stageToRun });
+      await refreshPipelineResults();
+      resetDownstreamState(stageToRun);
+      setProgress(100);
+      toast.success(
+        stageToRun === 'resume_parser'
+          ? 'Resume parser completed and saved.'
+          : stageToRun === 'brand_voice'
+            ? 'Brand voice completed and saved.'
+            : 'Influencer scout completed and saved.'
+      );
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Pipeline failed.');
+      toast.error(err.response?.data?.detail || 'Pipeline stage failed.');
     } finally {
       setLoadingPipeline(false);
       setLiveStatus('');
       setProgress(0);
       setRunningStepIdx(-1);
+    }
+  };
+
+  const runAgainForCurrentStep = async () => {
+    if (loadingPipeline || runningGap || generatingPosts || sendingPostEmail) return;
+    if (!user) return;
+
+    if (activeStepIdx === 0) {
+      await runPipelineStage('resume_parser');
+      return;
+    }
+    if (activeStepIdx === 1) {
+      await runPipelineStage('brand_voice');
+      return;
+    }
+    if (activeStepIdx === 2) {
+      await runPipelineStage('influencer');
+      return;
+    }
+    if (activeStepIdx === 3) {
+      await runGapAnalysis();
+      return;
+    }
+    if (activeStepIdx === 4) {
+      await generatePosts();
+      return;
+    }
+    if (activeStepIdx === 5) {
+      await sendToEmail();
     }
   };
 
@@ -387,6 +511,11 @@ export default function StudioPage() {
   };
 
   const handleNextStep = async () => {
+    if (activeStepIdx < 3 && pipelineStage !== 'done') {
+      await runPipeline();
+      return;
+    }
+
     if (activeStepIdx === 2) {
       const completed = await runGapAnalysis();
       if (completed) setActiveStepIdx(3);
@@ -412,23 +541,31 @@ export default function StudioPage() {
   const currentStatus = stepStatuses[activeStepIdx];
   const StepIcon = currentStep.icon;
   const nextStepLabel =
-    activeStepIdx === 2
-      ? (runningGap ? 'Analyzing…' : 'Gap Analysis')
-      : activeStepIdx === 3
-        ? (generatingPosts ? 'Generating…' : 'Generate Posts')
-        : activeStepIdx === 4
-          ? (sendingPostEmail ? 'Sending…' : 'Send Email')
-          : activeStepIdx < PIPELINE_STEPS.length - 1
-            ? PIPELINE_STEPS[activeStepIdx + 1].shortLabel
-            : 'Done';
+    pipelineStage === 'resume_parser'
+      ? (loadingPipeline ? 'Parsing…' : 'Run Resume Parser')
+      : pipelineStage === 'brand_voice'
+        ? (loadingPipeline ? 'Building…' : 'Run Brand Voice')
+        : pipelineStage === 'influencer'
+          ? (loadingPipeline ? 'Finding…' : 'Run Influencer Scout')
+          : activeStepIdx === 2
+            ? (runningGap ? 'Analyzing…' : 'Gap Analysis')
+            : activeStepIdx === 3
+              ? (generatingPosts ? 'Generating…' : 'Generate Posts')
+              : activeStepIdx === 4
+                ? (sendingPostEmail ? 'Sending…' : 'Send Email')
+                : activeStepIdx < PIPELINE_STEPS.length - 1
+                  ? PIPELINE_STEPS[activeStepIdx + 1].shortLabel
+                  : 'Done';
   const nextButtonDisabled =
-    activeStepIdx === 2
-      ? runningGap || selectedInfluencers.length === 0
-      : activeStepIdx === 3
-        ? generatingPosts || !gapAnalysisData
-        : activeStepIdx === 4
-          ? sendingPostEmail || !latestGeneratedPostOutput
-          : activeStepIdx === PIPELINE_STEPS.length - 1;
+    pipelineStage !== 'done' && activeStepIdx < 3
+      ? loadingPipeline
+      : activeStepIdx === 2
+        ? runningGap || selectedInfluencers.length === 0
+        : activeStepIdx === 3
+          ? generatingPosts || !gapAnalysisData
+          : activeStepIdx === 4
+            ? sendingPostEmail || !latestGeneratedPostOutput
+            : activeStepIdx === PIPELINE_STEPS.length - 1;
 
   return (
     <div className="relative min-h-screen overflow-hidden text-[#1c1a17]" style={{ background: '#ede9e3ff' }}>
@@ -505,7 +642,15 @@ export default function StudioPage() {
               {loadingPipeline
                 ? <Loader2 size={16} className="animate-spin" />
                 : <Play size={15} />}
-              {loadingPipeline ? 'Running pipeline…' : 'Run Pipeline'}
+              {loadingPipeline
+                ? 'Running stage…'
+                : pipelineStage === 'resume_parser'
+                  ? 'Run Resume Parser'
+                  : pipelineStage === 'brand_voice'
+                    ? 'Run Brand Voice'
+                    : pipelineStage === 'influencer'
+                      ? 'Run Influencer Scout'
+                      : 'Pipeline Complete'}
             </button>
 
             <AnimatePresence>
@@ -790,7 +935,12 @@ export default function StudioPage() {
                             borderTop: 'none',
                           }}
                         >
-                          <AgentCard data={activeResult} index={activeStepIdx} />
+                          <AgentCard
+                            data={activeResult}
+                            index={activeStepIdx}
+                            onRunAgain={runAgainForCurrentStep}
+                            isRunning={loadingPipeline || runningGap || generatingPosts || sendingPostEmail}
+                          />
                         </div>
                       </div>
                     ) : currentStatus === 'running' ? (
@@ -838,7 +988,7 @@ export default function StudioPage() {
                         <div>
                           <div className="font-semibold text-[#1c1a17]/35 mb-1">No output yet</div>
                           <div className="text-sm max-w-xs" style={{ color: 'rgba(90,85,80,0.45)' }}>
-                            {activeStepIdx === 0 ? 'Click "Run Pipeline" in the sidebar to start.' :
+                            {activeStepIdx === 0 ? 'Click "Run Resume Parser" in the sidebar to start.' :
                               activeStepIdx === 3 ? 'Select influencers (Step 3), then run Gap Analysis below.' :
                                 activeStepIdx === 4 ? 'Complete Gap Analysis (Step 4) first, then generate posts below.' :
                                   activeStepIdx === 5 ? 'Generate posts (Step 5) first, then send to email below.' :
@@ -870,6 +1020,15 @@ export default function StudioPage() {
                         {selectedInfluencers.length} selected
                       </span>
                     )}
+                    <button
+                      onClick={runAgainForCurrentStep}
+                      disabled={loadingPipeline}
+                      className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all hover:bg-black/10 disabled:opacity-50"
+                      style={{ color: 'rgba(90,85,80,0.6)', border: '1px solid rgba(180,160,140,0.2)' }}
+                    >
+                      <Play size={10} className={loadingPipeline ? 'animate-spin' : ''} />
+                      Refresh Results
+                    </button>
                   </div>
 
                   {influencers.length > 0 ? (

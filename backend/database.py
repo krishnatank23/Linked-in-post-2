@@ -38,5 +38,9 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE users ADD COLUMN parsed_profile_cache JSON"))
             if "brand_voice_cache" not in columns:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN brand_voice_cache JSON"))
+            if "influencer_scout_cache" not in columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN influencer_scout_cache JSON"))
+            if "selected_influencer_cache" not in columns:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN selected_influencer_cache JSON"))
             if "cache_updated_at" not in columns:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN cache_updated_at DATETIME"))

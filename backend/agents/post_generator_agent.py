@@ -3,17 +3,18 @@ import json
 import re
 import traceback
 from typing import Any
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from agents.llm_guard import guarded_llm_ainvoke, _current_user_id
+from agents.json_utils import parse_llm_json_content
 
 load_backend_env()
 
 
-def _get_openai_api_key() -> str | None:
-    """Support both the standard and legacy OpenAI env var names."""
-    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+def _get_groq_api_key() -> str | None:
+    """Support the Groq API key env var."""
+    return os.getenv("GROQ_API_KEY")
 
 POST_GENERATION_PROMPT = """You are a world-class LinkedIn ghostwriter and content strategist with expertise in professional, high-impact domain content.
 
@@ -263,10 +264,10 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_posts_text = "No previous posts (first generation)."
             previous_types_text = "None"
         
-        llm = ChatOpenAI(
-            model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
+        llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.8,  # Slightly higher for more creative autonomy
-            api_key=_get_openai_api_key(),
+            groq_api_key=_get_groq_api_key(),
         )
 
         # First extract a deterministic voice/emotion signature from pasted posts.
@@ -286,10 +287,10 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
 
         if normalized_past_posts["count"] > 0:
             try:
-                extractor_llm = ChatOpenAI(
-                    model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
+                extractor_llm = ChatGroq(
+                    model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
                     temperature=0.2,
-                    api_key=_get_openai_api_key(),
+                    groq_api_key=_get_groq_api_key(),
                 )
                 extractor_prompt = ChatPromptTemplate.from_template(VOICE_EMOTION_EXTRACTION_PROMPT)
                 extractor_chain = extractor_prompt | extractor_llm
@@ -299,16 +300,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                     timeout_seconds=45,
                 )
 
-                signature_content = extractor_response.content.strip()
-                if signature_content.startswith("```"):
-                    signature_content = signature_content.split("\n", 1)[1] if "\n" in signature_content else signature_content[3:]
-                if signature_content.endswith("```"):
-                    signature_content = signature_content[:-3]
-                signature_content = signature_content.strip()
-                if signature_content.startswith("json"):
-                    signature_content = signature_content[4:].strip()
-
-                parsed_signature = json.loads(signature_content)
+                parsed_signature = parse_llm_json_content(extractor_response.content)
                 if isinstance(parsed_signature, dict):
                     voice_emotion_signature = {**parsed_signature, "source": "user_past_posts"}
             except Exception as extraction_error:
@@ -332,16 +324,16 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         )
         
         content = response.content.strip()
-        # Clean up potential markdown fences
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        if content.startswith("json"):
-            content = content[4:].strip()
-            
-        post_results = json.loads(content)
+        if not content:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "The AI model returned an empty response during post generation. Please try again.",
+            }
+
+        post_results = parse_llm_json_content(content)
+        if not isinstance(post_results, dict):
+            raise json.JSONDecodeError("Post generator output was not a JSON object", str(post_results), 0)
         if isinstance(post_results, dict):
             post_results["voice_emotion_analysis"] = voice_emotion_signature
             post_results["user_past_posts_used_count"] = normalized_past_posts["count"]

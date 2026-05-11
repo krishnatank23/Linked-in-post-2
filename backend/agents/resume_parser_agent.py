@@ -4,10 +4,11 @@ import traceback
 from typing import Any
 from PyPDF2 import PdfReader
 from docx import Document
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from path_resolver import resolve_resume_path
+from agents.json_utils import parse_llm_json_content
 
 import asyncio
 import json
@@ -15,9 +16,9 @@ from agents.llm_guard import guarded_llm_ainvoke
 load_backend_env()
 
 
-def _get_openai_api_key() -> str | None:
-    """Support both the standard and legacy OpenAI env var names."""
-    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+def _get_groq_api_key() -> str | None:
+    """Support the Groq API key env var."""
+    return os.getenv("GROQ_API_KEY")
 
 RESUME_PARSER_PROMPT = """You are an expert resume and LinkedIn profile analyzer. 
 Your job is to extract ALL structured information from the given resume/profile text.
@@ -190,6 +191,9 @@ def _sanitize_personal_info(parsed_data: dict[str, Any], resume_text: str) -> No
         personal_info["portfolio_url"] = raw_portfolio.rstrip(".,;)")
 
 
+# Local parsing functions removed in favor of agents.json_utils.parse_llm_json_content
+
+
 async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
     """
     Agent 1: Parse resume and extract structured data using Groq LLM.
@@ -209,10 +213,10 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
             }
 
         # Step 2: Use Groq LLM to parse and structure the resume
-        llm = ChatOpenAI(
-            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("OPEN_AI_MODEL", "gpt-5.4-nano")),
+        llm = ChatGroq(
+            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
             temperature=0.1,
-            api_key=_get_openai_api_key(),
+            groq_api_key=_get_groq_api_key(),
         )
 
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
@@ -234,17 +238,18 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
             }
 
         content = response.content.strip()
-        # Clean up potential markdown fences
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        if content.startswith("json"):
-            content = content[4:].strip()
+        if not content:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "The AI model returned an empty response during resume parsing. Please try again.",
+            }
+
+        parsed_data = parse_llm_json_content(content)
+        if not isinstance(parsed_data, dict):
+            raise json.JSONDecodeError("Resume parser output was not a JSON object", str(parsed_data), 0)
 
         print(f"[DEBUG] Resume Parser: Successfully parsed resume JSON")
-        parsed_data = json.loads(content)
         _sanitize_personal_info(parsed_data, resume_text)
 
         return {
@@ -260,7 +265,7 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
     except json.JSONDecodeError as e:
         return {
             "status": "error",
-            "output": {"raw_response": content if 'content' in dir() else "N/A"},
+            "output": {"raw_response": response.content if 'response' in locals() else "N/A"},
             "error": f"Failed to parse LLM response as JSON: {str(e)}",
         }
     except Exception as e:

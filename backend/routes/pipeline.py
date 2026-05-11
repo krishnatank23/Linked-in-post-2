@@ -11,8 +11,11 @@ from io import BytesIO
 
 from database import get_db
 from models import User, AgentOutput, LinkedInPost
-from schemas import PipelineRequest, PipelineResponse, AgentResult, GapAnalysisRequest, GapAnalysisResponse, SaveResultRequest, GeneratePostsRequest, SendReminderRequest, SendPostEmailRequest
+from schemas import PipelineRequest, PipelineStageRequest, PipelineResponse, AgentResult, GapAnalysisRequest, GapAnalysisResponse, SaveResultRequest, GeneratePostsRequest, SendReminderRequest, SendPostEmailRequest
 from schemas import ScrapeLinkedInPostsRequest
+from agents.resume_parser_agent import run_resume_parser
+from agents.brand_voice_agent import run_brand_voice_agent
+from agents.influencer_agent import run_influencer_search
 from agents.workflow import run_pipeline
 from agents.gap_analyzer_agent import run_gap_analysis
 from agents.post_generator_agent import run_post_generation
@@ -22,6 +25,7 @@ from agents.llm_guard import set_current_user_context
 from agents.runtime_status import get_status, clear_status
 from env_config import load_backend_env
 from path_resolver import resolve_resume_path, to_portable_resume_path
+from user_state_markdown import write_user_state_markdown
 from scheduling_utils import pick_posting_schedule, normalize_posting_time_utc
 from PyPDF2 import PdfReader
 
@@ -30,13 +34,13 @@ router = APIRouter(prefix="/api", tags=["pipeline"])
 PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "1200"))
 
 
-def _ensure_openai_key() -> None:
+def _ensure_groq_key() -> None:
     load_backend_env()
-    openai_key = str(os.getenv("OPENAI_API_KEY") or "").strip()
-    if not openai_key:
+    groq_key = str(os.getenv("GROQ_API_KEY") or "").strip()
+    if not groq_key:
         raise HTTPException(
             status_code=400,
-            detail="OPENAI_API_KEY is missing. Add it to backend/.env, restart the backend, and run the pipeline again.",
+            detail="GROQ_API_KEY is missing. Add it to backend/.env, restart the backend, and run the pipeline again.",
         )
 
 
@@ -86,6 +90,49 @@ def _resolve_resume_paths(raw_resume_path: str) -> list[str]:
 def _portable_resume_path_payload(resolved_paths: list[str]) -> str:
     portable_paths = [to_portable_resume_path(path) for path in resolved_paths]
     return json.dumps(portable_paths) if len(portable_paths) > 1 else portable_paths[0]
+
+
+async def _replace_agent_output(
+    db: AsyncSession,
+    user_id: int,
+    agent_name: str,
+    agent_description: str,
+    status: str,
+    output: dict | None,
+    error_message: str | None,
+) -> AgentOutput:
+    existing = await db.execute(
+        select(AgentOutput).where(
+            AgentOutput.user_id == user_id,
+            AgentOutput.agent_name == agent_name,
+        )
+    )
+    for item in existing.scalars().all():
+        await db.delete(item)
+
+    agent_output = AgentOutput(
+        user_id=user_id,
+        agent_name=agent_name,
+        agent_description=agent_description,
+        status=status,
+        output_data=output,
+        error_message=error_message,
+    )
+    db.add(agent_output)
+    await db.flush()
+    return agent_output
+
+
+async def _refresh_user_markdown(user: User) -> None:
+    write_user_state_markdown(user)
+
+
+async def _get_user(db: AsyncSession, user_id: int) -> User:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 async def _get_latest_influencer_candidates(db: AsyncSession, user_id: int) -> list[dict]:
@@ -308,7 +355,7 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
 @router.post("/pipeline/run", response_model=PipelineResponse)
 async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depends(get_db)):
     """Run the full agentic AI pipeline for a given user."""
-    _ensure_openai_key()
+    _ensure_groq_key()
 
     # Get user and resume path
     result = await db.execute(select(User).where(User.id == request.user_id))
@@ -384,6 +431,8 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
                     user.cache_updated_at = datetime.utcnow()
                 if "Influence & Idol Scout Agent" in ar.get("agent_name", ""):
                     # Influencers are persisted in AgentOutput; update cache timestamp for strategy freshness.
+                    influencers = (ar.get("output") or {}).get("influencers") or []
+                    user.selected_influencer_cache = influencers[0] if influencers else None
                     user.cache_updated_at = datetime.utcnow()
                 if "LinkedIn Post Generator" in ar.get("agent_name", ""):
                     out_data = ar.get("output", {})
@@ -420,6 +469,144 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
     finally:
         set_current_user_context(None)
         clear_status(user.id)
+
+
+@router.post("/pipeline/run-stage", response_model=PipelineResponse)
+async def run_pipeline_stage(request: PipelineStageRequest, db: AsyncSession = Depends(get_db)):
+    """Run a single staged pipeline step and persist its output."""
+    _ensure_groq_key()
+
+    user = await _get_user(db, request.user_id)
+    stage = str(request.stage or "").strip().lower()
+
+    if stage == "resume_parser":
+        if not user.resume_path:
+            raise HTTPException(status_code=400, detail="No resume uploaded for this user")
+
+        try:
+            resolved_resume_paths = _resolve_resume_paths(user.resume_path)
+        except FileNotFoundError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Uploaded profile document not found on this server. Please re-upload your document(s) from the UI "
+                    f"and run the pipeline again. Details: {str(e)}"
+                ),
+            )
+
+        document_input = resolved_resume_paths if len(resolved_resume_paths) > 1 else resolved_resume_paths[0]
+        result = await asyncio.wait_for(run_resume_parser(document_input), timeout=PIPELINE_TIMEOUT_SECONDS)
+
+        agent_output = await _replace_agent_output(
+            db=db,
+            user_id=user.id,
+            agent_name="Resume Parser Agent",
+            agent_description="Extracts personal info, experience, skills, education, and all details from your resume using AI",
+            status=result["status"],
+            output=result.get("output"),
+            error_message=result.get("error"),
+        )
+
+        if result.get("status") == "success" and result.get("output"):
+            user.parsed_profile_cache = result["output"].get("parsed_profile")
+            user.brand_voice_cache = None
+            user.selected_influencer_cache = None
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+        await _refresh_user_markdown(user)
+
+        return PipelineResponse(
+            message="Resume parser stage completed",
+            results=[AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=agent_output.status,
+                output=agent_output.output_data,
+                error=agent_output.error_message,
+                is_saved=agent_output.is_saved,
+            )],
+        )
+
+    if stage == "brand_voice":
+        parsed_profile = user.parsed_profile_cache
+        if not parsed_profile:
+            raise HTTPException(status_code=400, detail="Run the resume parser first to create your profile cache")
+
+        result = await asyncio.wait_for(run_brand_voice_agent(parsed_profile), timeout=PIPELINE_TIMEOUT_SECONDS)
+        agent_output = await _replace_agent_output(
+            db=db,
+            user_id=user.id,
+            agent_name="Brand Voice & Persona Agent",
+            agent_description="Generates your professional identity, brand voice, and personal summary based on your profile",
+            status=result["status"],
+            output=result.get("output"),
+            error_message=result.get("error"),
+        )
+
+        if result.get("status") == "success" and result.get("output"):
+            user.brand_voice_cache = result["output"].get("brand_analysis")
+            user.selected_influencer_cache = None
+            user.influencer_scout_cache = None
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+        await _refresh_user_markdown(user)
+
+        return PipelineResponse(
+            message="Brand voice stage completed",
+            results=[AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=agent_output.status,
+                output=agent_output.output_data,
+                error=agent_output.error_message,
+                is_saved=agent_output.is_saved,
+            )],
+        )
+
+    if stage == "influencer":
+        parsed_profile = user.parsed_profile_cache
+        brand_voice = user.brand_voice_cache
+        if not parsed_profile or not brand_voice:
+            raise HTTPException(status_code=400, detail="Run resume parser and brand voice first")
+
+        result = await asyncio.wait_for(run_influencer_search(parsed_profile, brand_voice), timeout=PIPELINE_TIMEOUT_SECONDS)
+        agent_output = await _replace_agent_output(
+            db=db,
+            user_id=user.id,
+            agent_name="Influence & Idol Scout Agent",
+            agent_description="Finds your industry idols and top LinkedIn influencers matching your professional domain",
+            status=result["status"],
+            output=result.get("output"),
+            error_message=result.get("error"),
+        )
+
+        if result.get("status") == "success" and result.get("output"):
+            user.influencer_scout_cache = result.get("output")
+            influencers = (result.get("output") or {}).get("influencers") or []
+            user.selected_influencer_cache = influencers[0] if influencers else None
+            user.cache_updated_at = datetime.utcnow()
+
+        await db.commit()
+        await _refresh_user_markdown(user)
+
+        return PipelineResponse(
+            message="Influencer stage completed",
+            results=[AgentResult(
+                id=agent_output.id,
+                agent_name=agent_output.agent_name,
+                agent_description=agent_output.agent_description or "",
+                status=agent_output.status,
+                output=agent_output.output_data,
+                error=agent_output.error_message,
+                is_saved=agent_output.is_saved,
+            )],
+        )
+
+    raise HTTPException(status_code=400, detail="Invalid stage. Use resume_parser, brand_voice, or influencer.")
 
 
 @router.get("/pipeline/live-status/{user_id}")

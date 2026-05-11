@@ -29,7 +29,12 @@ class UserInfo(BaseModel):
     unique_id: str
     email: str
     username: str
+    resume_path: Optional[str] = None
     resume_filename: Optional[str] = None
+    parsed_profile_cache: Optional[Any] = None
+    brand_voice_cache: Optional[Any] = None
+    influencer_scout_cache: Optional[Any] = None
+    selected_influencer_cache: Optional[Any] = None
     created_at: datetime
 
     class Config:
@@ -39,6 +44,11 @@ class UserInfo(BaseModel):
 # ─── Pipeline Schemas ───
 class PipelineRequest(BaseModel):
     user_id: int
+
+
+class PipelineStageRequest(BaseModel):
+    user_id: int
+    stage: str
 
 
 class AgentResult(BaseModel):

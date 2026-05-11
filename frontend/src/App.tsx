@@ -15,7 +15,7 @@ function App() {
     <AppErrorBoundary>
       <AuthProvider>
         <Router>
-          <div className="app-colorwash min-h-screen text-white selection:bg-primary/30">
+          <div className="app-colorwash min-h-screen text-[#1c1a17] selection:bg-primary/30">
             <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
             <Routes>
               <Route path="/" element={<LandingPage />} />

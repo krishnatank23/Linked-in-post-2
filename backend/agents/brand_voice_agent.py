@@ -1,19 +1,63 @@
 import os
 import json
+import re
+import ast
 import traceback
 import asyncio
 from typing import Any
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from agents.llm_guard import guarded_llm_ainvoke
+from agents.json_utils import parse_llm_json_content
 
 load_backend_env()
 
 
-def _get_openai_api_key() -> str | None:
-    """Support both the standard and legacy OpenAI env var names."""
-    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+def _get_groq_api_key() -> str | None:
+    """Support the Groq API key env var."""
+    return os.getenv("GROQ_API_KEY")
+
+
+# Local parsing functions removed in favor of agents.json_utils.parse_llm_json_content
+
+
+async def _repair_brand_voice_content(raw_content: str, parsed_profile: dict, industry_context: str) -> dict[str, Any]:
+    """Use the LLM to reformat a malformed response into strict JSON."""
+    repair_prompt = ChatPromptTemplate.from_template(
+        """You are a JSON repair tool.
+
+Original prompt context:
+Profile data:
+{profile_data}
+
+Industry context:
+{industry_context}
+
+Model output to repair:
+{raw_content}
+
+Return ONLY valid JSON matching the brand voice schema. No markdown, no explanation, no code fences."""
+    )
+    repair_llm = ChatGroq(
+        model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        temperature=0.0,
+        groq_api_key=_get_groq_api_key(),
+    )
+    repair_chain = repair_prompt | repair_llm
+    repair_response = await guarded_llm_ainvoke(
+        repair_chain,
+        {
+            "profile_data": json.dumps(parsed_profile, indent=2),
+            "industry_context": industry_context,
+            "raw_content": raw_content,
+        },
+        timeout_seconds=45,
+    )
+    repaired = parse_llm_json_content(repair_response.content)
+    if not isinstance(repaired, dict):
+        raise json.JSONDecodeError("Repaired brand voice output was not a JSON object", repair_response.content, 0)
+    return repaired
 
 BRAND_VOICE_PROMPT = """You are an expert personal branding strategist and career coach.
 
@@ -135,11 +179,11 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         industry_context = await search_industry_context(parsed_profile)
         print(f"[DEBUG] Brand Voice Agent: Industry context retrieved ({len(industry_context)} chars)")
 
-        # Step 2: Use OpenAI LLM to generate brand voice and persona
-        llm = ChatOpenAI(
-            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("OPEN_AI_MODEL", "gpt-4-turbo")),
-            temperature=0.4,
-            api_key=_get_openai_api_key(),
+        # Step 2: Use Groq LLM to generate brand voice and persona
+        llm = ChatGroq(
+            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+            temperature=0.1,
+            groq_api_key=_get_groq_api_key(),
         )
 
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
@@ -150,7 +194,7 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
             chain,
             {
                 "profile_data": json.dumps(parsed_profile, indent=2),
-                "industry_context": industry_context,
+                "industry_context": industry_context[:10000], # Cap to 10k chars
             },
             timeout_seconds=60,
         )
@@ -158,17 +202,26 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
 
         # Parse the JSON response
         content = response.content.strip()
-        # Clean up potential markdown fences
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        if content.startswith("json"):
-            content = content[4:].strip()
-        print(f"[DEBUG] Brand Voice Agent: Successfully parsed brand voice JSON")
+        if not content:
+            return {
+                "status": "error",
+                "output": None,
+                "error": (
+                    "The AI model returned an empty response for brand voice. "
+                    "This can happen if the input (profile/industry context) is too large "
+                    "or if there's a temporary issue with the Groq service."
+                ),
+            }
 
-        brand_data = json.loads(content)
+        try:
+            brand_data = parse_llm_json_content(content)
+            if not isinstance(brand_data, dict):
+                raise ValueError("Output was not a JSON object")
+        except Exception:
+            print(f"[DEBUG] Brand Voice Agent: Initial parse failed, attempting repair...")
+            brand_data = await _repair_brand_voice_content(content, parsed_profile, industry_context)
+        
+        print(f"[DEBUG] Brand Voice Agent: Successfully parsed brand voice JSON")
 
         return {
             "status": "success",
@@ -182,7 +235,7 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
     except json.JSONDecodeError as e:
         return {
             "status": "error",
-            "output": {"raw_response": content if 'content' in dir() else "N/A"},
+            "output": {"raw_response": content if 'content' in locals() else "N/A"},
             "error": f"Failed to parse brand voice response as JSON: {str(e)}",
         }
     except Exception as e:

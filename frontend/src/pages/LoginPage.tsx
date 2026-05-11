@@ -33,7 +33,20 @@ export default function LoginPage() {
     try {
       const response = await api.post('/login', { email: email.trim().toLowerCase(), password });
       const { access_token, user_id, unique_id, username } = response.data;
-      login(access_token, { id: user_id, unique_id, username, email: email.trim().toLowerCase() });
+      const userResponse = await api.get(`/user/${user_id}`);
+      login(access_token, {
+        id: user_id,
+        unique_id,
+        username,
+        email: email.trim().toLowerCase(),
+        resume_path: userResponse.data?.resume_path ?? null,
+        resume_filename: userResponse.data?.resume_filename ?? null,
+        parsed_profile_cache: userResponse.data?.parsed_profile_cache,
+        brand_voice_cache: userResponse.data?.brand_voice_cache,
+        influencer_scout_cache: userResponse.data?.influencer_scout_cache,
+        selected_influencer_cache: userResponse.data?.selected_influencer_cache,
+        created_at: userResponse.data?.created_at,
+      });
       toast.success(`Welcome back, ${username}`);
       navigate('/studio');
     } catch (error: any) {

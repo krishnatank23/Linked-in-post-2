@@ -6,6 +6,8 @@ import { glassCard } from '../styles/classes';
 interface AgentCardProps {
   data: any;
   index: number;
+  onRunAgain?: () => void;
+  isRunning?: boolean;
 }
 
 function asArray(value: any): any[] {
@@ -78,7 +80,7 @@ function renderList(items: any[], fallback: string) {
   );
 }
 
-const AgentCard = ({ data, index }: AgentCardProps) => {
+const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
   const isSuccess = data.status === 'success';
   const agentName = String(data.agent_name || 'Agent');
   const output = data.output || {};
@@ -474,9 +476,21 @@ const AgentCard = ({ data, index }: AgentCardProps) => {
         <div className="text-[10px] uppercase tracking-[0.24em] text-[#1c1a17]/30 flex items-center gap-2">
           <Globe size={12} /> Live pipeline result
         </div>
-        <button className="text-[#1c1a17]/45 hover:text-accent transition-colors">
-          <ChevronRight size={18} />
-        </button>
+        {onRunAgain ? (
+          <button
+            type="button"
+            onClick={onRunAgain}
+            disabled={Boolean(isRunning)}
+            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-black/5 px-4 py-2 text-xs font-semibold text-[#1c1a17]/75 transition-colors hover:border-accent/30 hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Run again
+            <ChevronRight size={16} />
+          </button>
+        ) : (
+          <button className="text-[#1c1a17]/45 hover:text-accent transition-colors">
+            <ChevronRight size={18} />
+          </button>
+        )}
       </div>
     </motion.div>
   );

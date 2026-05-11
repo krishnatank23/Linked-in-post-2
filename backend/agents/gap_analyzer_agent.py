@@ -2,17 +2,18 @@ import os
 import json
 import traceback
 from typing import Any
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from agents.llm_guard import guarded_llm_ainvoke
+from agents.json_utils import parse_llm_json_content
 
 load_backend_env()
 
 
-def _get_openai_api_key() -> str | None:
-    """Support both the standard and legacy OpenAI env var names."""
-    return os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY")
+def _get_groq_api_key() -> str | None:
+    """Support the Groq API key env var."""
+    return os.getenv("GROQ_API_KEY")
 
 GAP_ANALYSIS_PROMPT = """You are a senior personal branding strategist and LinkedIn content expert.
 Your goal is to analyze the gap between the user and ONE selected influencer, then produce a concrete and measurable strategy.
@@ -36,6 +37,7 @@ Rules:
 - Compare user profile + likely content posture against influencer strengths.
 - Use domain-aware recommendations (user domain and niche must drive the strategy).
 - Focus on professional, insightful, meaningful communication style.
+- DYNAMIC FREQUENCY: Calculate posting frequency (2-5 days/week) based on the overall gap score. Higher gap = higher frequency.
 
 Provide JSON in this exact structure:
 
@@ -82,27 +84,16 @@ Provide JSON in this exact structure:
         "interactive_content_formats": ["Poll", "Debate post", "Ask-me-anything", "Case breakdown"],
         "recommended_post_types": ["Educational", "Thought Leadership", "Interactive", "Case Study"],
         "proposed_schedule": [
+            "// Array of 2 to 5 specific post objects tailored to the gap. DO NOT always return 3 items.",
             {{
-                "day": "Day 1",
-                "post_type": "Educational / Storytelling / Interactive / Thought Leadership",
+                "day": "Specific Day (e.g. Monday)",
+                "post_type": "The type of post",
                 "topic": "Specific domain topic",
                 "goal": "How this closes a specific gap"
-            }},
-            {{
-                "day": "Day 3",
-                "post_type": "...",
-                "topic": "...",
-                "goal": "..."
-            }},
-            {{
-                "day": "Day 5",
-                "post_type": "...",
-                "topic": "...",
-                "goal": "..."
             }}
         ],
-        "recommended_days": ["Monday", "Wednesday", "Friday"],
-        "recommended_time_utc": "11:00",
+        "recommended_days": ["List of recommended days, length matching frequency"],
+        "recommended_time_utc": "Preferred time (e.g. 09:00)",
         "day_selection_rationale": "Why these days fit the user gap profile",
         "tone_adjustment": "How to keep professional tone while adding authority and interaction"
     }},
@@ -114,8 +105,8 @@ Provide JSON in this exact structure:
         "Immediate step 5"
     ],
     "reminder_plan": {{
-        "reminder_days": ["Monday", "Wednesday", "Friday"],
-        "reminder_time_utc": "11:00",
+        "reminder_days": ["List of days matching the posting schedule"],
+        "reminder_time_utc": "Preferred reminder time",
         "why_this_reminder_cadence": "Why these reminders are needed for consistency"
     }}
 }}
@@ -128,10 +119,10 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
     Agent 4: Perform gap analysis between user and influencer, then generate content strategy.
     """
     try:
-        llm = ChatOpenAI(
-            model=os.getenv("OPEN_AI_MODEL", "gpt-4-turbo"),
+        llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.4,
-            api_key=_get_openai_api_key(),
+            groq_api_key=_get_groq_api_key(),
         )
         
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
@@ -148,16 +139,16 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
         )
         
         content = response.content.strip()
-        # Clean up potential markdown fences
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        if content.startswith("json"):
-            content = content[4:].strip()
-            
-        analysis_results = json.loads(content)
+        if not content:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "The AI model returned an empty response during gap analysis. Please try again.",
+            }
+
+        analysis_results = parse_llm_json_content(content)
+        if not isinstance(analysis_results, dict):
+            raise json.JSONDecodeError("Gap analysis output was not a JSON object", str(analysis_results), 0)
         
         return {
             "status": "success",

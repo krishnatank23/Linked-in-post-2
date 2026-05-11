@@ -5,6 +5,13 @@ type AuthUser = {
   unique_id: string;
   username: string;
   email?: string;
+  resume_path?: string | null;
+  resume_filename?: string | null;
+  parsed_profile_cache?: any;
+  brand_voice_cache?: any;
+  influencer_scout_cache?: any;
+  selected_influencer_cache?: any;
+  created_at?: string;
 };
 
 type AuthContextValue = {

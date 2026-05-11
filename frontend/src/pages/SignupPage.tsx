@@ -79,7 +79,20 @@ export default function SignupPage() {
       const email = formData.email.trim().toLowerCase();
       const loginResponse = await api.post('/login', { email, password: formData.password });
       const { access_token, user_id, unique_id, username } = loginResponse.data;
-      login(access_token, { id: user_id, unique_id, username, email });
+      const userResponse = await api.get(`/user/${user_id}`);
+      login(access_token, {
+        id: user_id,
+        unique_id,
+        username,
+        email,
+        resume_path: userResponse.data?.resume_path ?? null,
+        resume_filename: userResponse.data?.resume_filename ?? null,
+        parsed_profile_cache: userResponse.data?.parsed_profile_cache,
+        brand_voice_cache: userResponse.data?.brand_voice_cache,
+        influencer_scout_cache: userResponse.data?.influencer_scout_cache,
+        selected_influencer_cache: userResponse.data?.selected_influencer_cache,
+        created_at: userResponse.data?.created_at,
+      });
       toast.success(registerResponse.data?.message || 'Account created!');
       navigate('/studio');
     } catch (error: any) {
@@ -117,7 +130,7 @@ export default function SignupPage() {
               Post<span className="text-terracotta">Pilot</span> AI
             </span>
           </Link>
-          <h1 className="heading-fraunces" style={{ fontSize: 'clamp(26px,5vw,34px)', fontWeight: 700, margin: '0 0 8px' }}>
+          <h1 className="heading-fraunces" style={{ fontSize: 'clamp(26px,5vw,34px)', fontWeight: 700, margin: '0 0 8px', color: 'var(--text-dark)' }}>
             Create your account
           </h1>
           <p style={{ color: 'var(--text-mid)', margin: 0, fontSize: '16px' }}>

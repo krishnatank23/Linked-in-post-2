@@ -23,7 +23,8 @@ BRAND VOICE: {brand_voice}
 INFLUENCER: {influencer_data}
 
 Rules:
-- Identify specific content, authority, and engagement gaps.
+- STRICT PHRASING: You must describe what the USER lacks compared to the INFLUENCER. Do not critique the influencer. Always phrase it as "Compared to [Influencer Name], your profile lacks..." or "While the influencer has X, you currently have Y."
+- Identify specific content, authority, and engagement gaps of the USER.
 - DYNAMIC FREQUENCY: Calculate frequency (2-5 days/week) based on gap severity.
 - Be concrete and evidence-oriented.
 
@@ -41,7 +42,8 @@ JSON Structure:
         "profile_gap_score": 0-100,
         "authority_gap_score": 0-100,
         "engagement_gap_score": 0-100,
-        "overall_gap_score": 0-100
+        "overall_gap_score": 0-100,
+        "score_explanation": "A short 1-2 sentence explanation of what these scores mean (e.g., 'A score of 100 means your profile perfectly matches the influencer. Lower scores indicate significant gaps you need to close.')"
     }},
     "content_strategy": {{
         "content_pillars": ["4 themes"],

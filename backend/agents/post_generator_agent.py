@@ -106,21 +106,21 @@ HUMANIZATION & QUALITY RULES (CRITICAL):
 
 - Treat EXTRACTED VOICE & EMOTION SIGNATURE as the primary style guide.
 - Analyze the USER PAST POSTS (if provided) and strictly match the emotion, cadence, sentence structure, and specific vocabulary/phrases the user uses. Maintain their exact authentic voice.
-- Write like a human having a smart conversation with peers
-- Vary sentence structure: Mix short punchy sentences with longer detailed ones
-- DO NOT use buzzwords: 'leverage', 'streamline', 'delve', 'tapestry', 'unleash', 'empower'
-- DO NOT use em dashes (—), use commas or periods instead
-- NO corporate jargon, NO press-release tone, NO marketing speak
-- Be authentic, direct, and genuinely conversational
-- NO EMOJIS in the post content
-- Proper grammar and punctuation throughout
+- SPECIFICITY OVER VAGUENESS: Do not use broad generalizations. Use highly specific scenarios, domain-specific terminology, and relatable pain points drawn from the user's profile and gap analysis.
+- WRITE LIKE YOU TALK: Write like a human having a smart, casual conversation with peers over coffee.
+- FORMATTING: Use generous white space. Keep paragraphs to 1-3 sentences maximum. Use line breaks to create a reading rhythm.
+- NO AI SPEAK: Do NOT use phrases like "In today's fast-paced digital world," "It's more important than ever," or "Navigating the complexities of..."
+- BANNED WORDS: 'leverage', 'streamline', 'delve', 'tapestry', 'unleash', 'empower', 'synergy', 'testament', 'pivotal'.
+- DO NOT use em dashes (—), use commas or periods instead.
+- NO EMOJIS in the post content under any circumstances.
+- Speak directly to the USER's specific target audience and address their exact problems.
 
-HOOK & ENGAGEMENT:
-- Start with a compelling hook that makes readers stop scrolling
-- Include thought-provoking lines that invite discussion
-- End with a genuine question that encourages comments
-- Make it about the reader, not about promoting yourself
-- Every post must include an interaction trigger (question, challenge, request for perspective, or mini-poll style prompt)
+HOOK & ENGAGEMENT (THE FIRST 3 LINES):
+- Line 1 (The Hook): A bold claim, a counter-intuitive thought, a stark metric, or a direct pattern-interrupt. MUST be under 12 words.
+- Line 2 (The Re-Hook): Provide context or build tension immediately.
+- Line 3: Transition smoothly into the core story or lesson.
+- The Ending: End with a highly specific, single question that requires a thoughtful answer (not a simple "yes/no" or "What do you think?").
+- Focus on providing immense, actionable value to the reader.
 
 ═══════════════════════════════════════════════════════════════════
 

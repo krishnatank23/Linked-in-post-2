@@ -328,6 +328,11 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
                     <DetailRow label="Authority Score" value={entry.analysis?.gap_scores?.authority_gap_score} />
                     <DetailRow label="Engagement Score" value={entry.analysis?.gap_scores?.engagement_gap_score} />
                   </div>
+                  {entry.analysis?.gap_scores?.score_explanation ? (
+                    <div className="mt-2 text-[11px] leading-relaxed italic" style={{ color: 'rgba(90,85,80,0.8)' }}>
+                      💡 {entry.analysis.gap_scores.score_explanation}
+                    </div>
+                  ) : null}
                   {asArray(entry.analysis?.gap_analysis?.key_missing_elements).length > 0 ? (
                     <div className="mt-3">
                       <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Missing Elements</div>

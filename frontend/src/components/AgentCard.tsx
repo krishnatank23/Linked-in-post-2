@@ -324,15 +324,10 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
                     <DetailRow label="Consistency Gap" value={entry.analysis?.gap_analysis?.posting_consistency_gap} />
                   </div>
                   <div className="grid md:grid-cols-3 gap-3 mt-3">
-                    <DetailRow label="Profile Score" value={entry.analysis?.gap_scores?.profile_gap_score} />
-                    <DetailRow label="Authority Score" value={entry.analysis?.gap_scores?.authority_gap_score} />
-                    <DetailRow label="Engagement Score" value={entry.analysis?.gap_scores?.engagement_gap_score} />
+                    <DetailRow label="Profile Match" value={entry.analysis?.gap_scores?.profile_gap_score !== undefined ? `${entry.analysis.gap_scores.profile_gap_score}%` : 'N/A'} />
+                    <DetailRow label="Authority Match" value={entry.analysis?.gap_scores?.authority_gap_score !== undefined ? `${entry.analysis.gap_scores.authority_gap_score}%` : 'N/A'} />
+                    <DetailRow label="Engagement Match" value={entry.analysis?.gap_scores?.engagement_gap_score !== undefined ? `${entry.analysis.gap_scores.engagement_gap_score}%` : 'N/A'} />
                   </div>
-                  {entry.analysis?.gap_scores?.score_explanation ? (
-                    <div className="mt-2 text-[11px] leading-relaxed italic" style={{ color: 'rgba(90,85,80,0.8)' }}>
-                      💡 {entry.analysis.gap_scores.score_explanation}
-                    </div>
-                  ) : null}
                   {asArray(entry.analysis?.gap_analysis?.key_missing_elements).length > 0 ? (
                     <div className="mt-3">
                       <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Missing Elements</div>
@@ -359,10 +354,17 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
             <div className="text-xs uppercase tracking-[0.2em] text-accent mb-2">Overall Gap</div>
             <p className="text-sm text-[#1c1a17]/85 leading-7 font-medium">{overall.content_authority_gap || 'Combined gap summary generated.'}</p>
           </div>
+          
+          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+            <p className="text-xs text-blue-900/80 leading-5">
+              <strong>💡 How to read these metrics:</strong> A score of <strong>100%</strong> means your profile is a perfect match with the influencer's level of quality and engagement. A lower score (like <strong>20%</strong>) means you have a massive gap in that area and need to heavily improve your content to catch up to them.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatCard label="Overall Gap Score" value={String(overallScores.overall_gap_score ?? 'N/A')} icon={BarChart3} />
-            <StatCard label="Authority Score" value={String(overallScores.authority_gap_score ?? 'N/A')} icon={Sparkles} />
-            <StatCard label="Engagement Score" value={String(overallScores.engagement_gap_score ?? 'N/A')} icon={UserCheck} />
+            <StatCard label="Overall Match" value={overallScores.overall_gap_score !== undefined ? `${overallScores.overall_gap_score}%` : 'N/A'} icon={BarChart3} />
+            <StatCard label="Authority Match" value={overallScores.authority_gap_score !== undefined ? `${overallScores.authority_gap_score}%` : 'N/A'} icon={Sparkles} />
+            <StatCard label="Engagement Match" value={overallScores.engagement_gap_score !== undefined ? `${overallScores.engagement_gap_score}%` : 'N/A'} icon={UserCheck} />
           </div>
           <div className="space-y-3">
             <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35">Content Pillars</div>

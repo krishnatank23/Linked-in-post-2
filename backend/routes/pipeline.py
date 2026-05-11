@@ -933,27 +933,29 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
             error=ar_posts.get("error"),
         )
 
-        if ar_posts["status"] == "success":
-            db.add(AgentOutput(
-                user_id=user.id,
-                agent_name="LinkedIn Post Generator",
-                agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
-                status=ar_posts["status"],
-                output_data=ar_posts.get("output"),
-                error_message=ar_posts.get("error"),
-            ))
-            # Append Post Generator result first
-            results.append(post_agent_result)
-            
-            # Update user schedule from model suggestion (or robust fallback strategy).
-            out_data = ar_posts.get("output", {})
-            user.posting_schedule = pick_posting_schedule(
-                post_output=out_data,
-                gap_analysis=request.gap_analysis_data or {},
-            )
-            user.posting_time_utc = normalize_posting_time_utc(out_data.get("posting_time_utc"), fallback="11:00")
-            user.cache_updated_at = datetime.utcnow()
-            await db.commit()
+        if ar_posts["status"] != "success":
+            raise HTTPException(status_code=500, detail=ar_posts.get("error") or "Post generation failed internally.")
+
+        db.add(AgentOutput(
+            user_id=user.id,
+            agent_name="LinkedIn Post Generator",
+            agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+            status=ar_posts["status"],
+            output_data=ar_posts.get("output"),
+            error_message=ar_posts.get("error"),
+        ))
+        
+        results.append(post_agent_result)
+        
+        # Update user schedule from model suggestion (or robust fallback strategy).
+        out_data = ar_posts.get("output", {})
+        user.posting_schedule = pick_posting_schedule(
+            post_output=out_data,
+            gap_analysis=request.gap_analysis_data or {},
+        )
+        user.posting_time_utc = normalize_posting_time_utc(out_data.get("posting_time_utc"), fallback="11:00")
+        user.cache_updated_at = datetime.utcnow()
+        await db.commit()
 
         return GapAnalysisResponse(
             message="Post generation completed successfully",

@@ -128,6 +128,7 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
         chain = prompt | llm
         
+        print(f"[GapAnalyzer] Running analysis for influencer: {influencer_data.get('title') or influencer_data.get('name')}")
         response = await guarded_llm_ainvoke(
             chain,
             {
@@ -135,7 +136,7 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
                 "brand_voice": json.dumps(brand_voice, indent=2),
                 "influencer_data": json.dumps(influencer_data, indent=2),
             },
-            timeout_seconds=60,
+            timeout_seconds=120,
         )
         
         content = response.content.strip()

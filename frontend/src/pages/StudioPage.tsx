@@ -389,7 +389,14 @@ export default function StudioPage() {
   const toggleInfluencer = (inf: any) => {
     setSelectedInfluencers(prev => {
       const key = inf.link || inf.title;
-      return prev.some(i => (i.link || i.title) === key)
+      const isCurrentlySelected = prev.some(i => (i.link || i.title) === key);
+      
+      if (!isCurrentlySelected && prev.length >= 3) {
+        toast.error('You can only select up to 3 influencers at a time to stay within limits.');
+        return prev;
+      }
+      
+      return isCurrentlySelected
         ? prev.filter(i => (i.link || i.title) !== key)
         : [...prev, inf];
     });
@@ -1034,6 +1041,10 @@ export default function StudioPage() {
                       <Play size={10} className={loadingPipeline ? 'animate-spin' : ''} />
                       Refresh Results
                     </button>
+                  </div>
+
+                  <div className="mb-4 text-xs font-medium px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900/80">
+                    💡 <strong>Limit:</strong> You can only select up to <strong>3 influencers</strong> at a time. The AI will compare your profile against them in the next step.
                   </div>
 
                   {influencers.length > 0 ? (

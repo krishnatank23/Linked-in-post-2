@@ -338,6 +338,18 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
               ))}
             </div>
           ) : null}
+
+          {asArray(output.analysis_errors).length > 0 && (
+            <div className="space-y-3 mt-5">
+              <div className="text-xs uppercase tracking-[0.2em] text-red-500/60 font-bold">Analysis Failures</div>
+              {asArray(output.analysis_errors).map((err: any, idx: number) => (
+                <div key={idx} className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10">
+                  <div className="font-semibold text-red-400 mb-1">{err.influencer?.title || `Influencer ${idx + 1}`}</div>
+                  <p className="text-xs text-red-300/80 leading-5">{String(err.error).split('\n')[0]}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="p-4 rounded-2xl bg-accent/10 border border-accent/20">
             <div className="text-xs uppercase tracking-[0.2em] text-accent mb-2">Overall Gap</div>
             <p className="text-sm text-[#1c1a17]/85 leading-7 font-medium">{overall.content_authority_gap || 'Combined gap summary generated.'}</p>

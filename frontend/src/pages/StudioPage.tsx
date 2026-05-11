@@ -412,6 +412,11 @@ export default function StudioPage() {
       toast.error('Select at least one LinkedIn URL first.');
       return false;
     }
+
+    // Clear old data to prevent showing stale results
+    setGapAnalysisData(null);
+    setResults(prev => prev.filter(r => !r.agent_name?.includes('Gap Analysis')));
+
     setRunningGap(true);
     try {
       const analyzedInfluencers = selectedInfluencers.map((influencer, idx) => {

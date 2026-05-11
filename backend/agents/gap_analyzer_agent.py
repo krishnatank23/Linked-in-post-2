@@ -69,24 +69,28 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
     Agent 4: Perform gap analysis between user and influencer, then generate content strategy.
     """
     try:
+        # Token Optimization: Truncate large inputs to stay within daily limits
+        truncated_profile = {k: v for k, v in user_profile.items() if k in ["personal_info", "experience", "skills", "summary"]}
+        truncated_voice = {k: v for k, v in brand_voice.items() if k in ["identity", "voice_traits", "content_themes"]}
+
         llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            temperature=0.4,
+            model=os.getenv("GROQ_MODEL_LITE", "llama-3.1-8b-instant"),
+            temperature=0.3,
             groq_api_key=_get_groq_api_key(),
         )
         
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
         chain = prompt | llm
         
-        print(f"[GapAnalyzer] Running analysis for influencer: {influencer_data.get('title') or influencer_data.get('name')}")
+        print(f"[GapAnalyzer] Running LITE analysis for influencer: {influencer_data.get('title') or influencer_data.get('name')}")
         response = await guarded_llm_ainvoke(
             chain,
             {
-                "user_profile": json.dumps(user_profile, indent=2),
-                "brand_voice": json.dumps(brand_voice, indent=2),
-                "influencer_data": json.dumps(influencer_data, indent=2),
+                "user_profile": json.dumps(truncated_profile, indent=2)[:4000],
+                "brand_voice": json.dumps(truncated_voice, indent=2)[:2000],
+                "influencer_data": json.dumps(influencer_data, indent=2)[:6000],
             },
-            timeout_seconds=120,
+            timeout_seconds=90,
         )
         
         content = response.content.strip()

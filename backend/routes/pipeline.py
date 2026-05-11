@@ -766,9 +766,12 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
                 })
 
         if not per_influencer_analysis:
+            # Diagnostic: Print the actual errors to the terminal
+            print(f"[GAP ANALYSIS FAILED] Errors: {json.dumps(per_influencer_errors, indent=2)}")
+            first_error = per_influencer_errors[0].get("error", "Unknown agent error") if per_influencer_errors else "No influencers processed"
             raise HTTPException(
                 status_code=500,
-                detail="Gap analysis failed for all selected influencers. Please try again with different selections."
+                detail=f"Gap analysis failed for all selected influencers. Agent Error: {first_error}"
             )
 
         combined_gap_output = _build_overall_gap_summary(per_influencer_analysis)

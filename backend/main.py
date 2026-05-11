@@ -30,14 +30,33 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"], # Allow all for production accessibility, adjust for security later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Bot / Scan Filtering Middleware
+class BotFilterMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path.lower()
+        # Common security scan extensions and paths to ignore/silence
+        bot_indicators = [
+            ".php", ".gz", ".tar", ".bak", ".config", ".env", ".sql", ".yaml", ".yml",
+            "phpinfo", "admin", "db.", "backup", "credentials", "config", "shell"
+        ]
+        if any(indicator in path for indicator in bot_indicators):
+            # Return 403 without passing to logs if possible
+            return Response("Forbidden", status_code=403)
+        return await call_next(request)
+
+app.add_middleware(BotFilterMiddleware)
 
 # API routes
 app.include_router(auth_router)

@@ -15,103 +15,53 @@ def _get_groq_api_key() -> str | None:
     """Support the Groq API key env var."""
     return os.getenv("GROQ_API_KEY")
 
-GAP_ANALYSIS_PROMPT = """You are a senior personal branding strategist and LinkedIn content expert.
-Your goal is to analyze the gap between the user and ONE selected influencer, then produce a concrete and measurable strategy.
+GAP_ANALYSIS_PROMPT = """You are a senior LinkedIn branding strategist.
+Compare the USER with the INFLUENCER and provide a measurable gap analysis and strategy.
 
-USER DATA:
-Profile: {user_profile}
-Brand Voice: {brand_voice}
-
-INFLUENCER DATA:
-{influencer_data}
-
-Optional supporting context may also be embedded in the influencer data, such as:
-- manual_profile_text: text extracted from an uploaded influencer profile PDF
-- manual_post_samples / manual_posts_text: pasted posts from that influencer
-- user_past_posts: the user's own recent posts for emotion, cadence, and voice matching
-
-When this extra context is present, use it to refine authority, tone, cadence, and emotional style comparisons.
+USER: {user_profile}
+BRAND VOICE: {brand_voice}
+INFLUENCER: {influencer_data}
 
 Rules:
-- Be specific and evidence-oriented, avoid generic advice.
-- Compare user profile + likely content posture against influencer strengths.
-- Use domain-aware recommendations (user domain and niche must drive the strategy).
-- Focus on professional, insightful, meaningful communication style.
-- DYNAMIC FREQUENCY: Calculate posting frequency (2-5 days/week) based on the overall gap score. Higher gap = higher frequency.
+- Identify specific content, authority, and engagement gaps.
+- DYNAMIC FREQUENCY: Calculate frequency (2-5 days/week) based on gap severity.
+- Be concrete and evidence-oriented.
 
-Provide JSON in this exact structure:
-
+JSON Structure:
 {{
-    "influencer_snapshot": {{
-        "name": "Influencer name/title",
-        "positioning_summary": "1-2 lines on why this influencer is strong"
-    }},
+    "influencer_snapshot": {{ "name": "...", "positioning_summary": "..." }},
     "gap_analysis": {{
-        "profile_completeness_gap": "Specific comparison of profile impact and authority",
-        "content_authority_gap": "Specific thought-leadership/content gap",
-        "engagement_gap": "Specific audience interaction/engagement gap",
-        "posting_consistency_gap": "Specific cadence and consistency gap",
-        "domain_positioning_gap": "Specific niche/domain positioning gap",
-        "key_missing_elements": ["5-8 concrete missing elements"]
+        "profile_completeness_gap": "...",
+        "content_authority_gap": "...",
+        "engagement_gap": "...",
+        "posting_consistency_gap": "...",
+        "key_missing_elements": ["List of 5 elements"]
     }},
     "gap_scores": {{
-        "profile_gap_score": 0,
-        "authority_gap_score": 0,
-        "engagement_gap_score": 0,
-        "consistency_gap_score": 0,
-        "domain_positioning_gap_score": 0,
-        "overall_gap_score": 0
-    }},
-    "comparison_matrix": {{
-        "profile": {{
-            "user_state": "Current user state",
-            "influencer_state": "Influencer state",
-            "delta": "What must change"
-        }},
-        "content": {{
-            "user_state": "Current user state",
-            "influencer_state": "Influencer state",
-            "delta": "What must change"
-        }},
-        "engagement": {{
-            "user_state": "Current user state",
-            "influencer_state": "Influencer state",
-            "delta": "What must change"
-        }}
+        "profile_gap_score": 0-100,
+        "authority_gap_score": 0-100,
+        "engagement_gap_score": 0-100,
+        "overall_gap_score": 0-100
     }},
     "content_strategy": {{
-        "content_pillars": ["4-6 core domain themes the user should own"],
-        "interactive_content_formats": ["Poll", "Debate post", "Ask-me-anything", "Case breakdown"],
-        "recommended_post_types": ["Educational", "Thought Leadership", "Interactive", "Case Study"],
+        "content_pillars": ["4 themes"],
+        "recommended_post_types": ["Educational", "Thought Leadership", "Interactive"],
         "proposed_schedule": [
-            "// Array of 2 to 5 specific post objects tailored to the gap. DO NOT always return 3 items.",
-            {{
-                "day": "Specific Day (e.g. Monday)",
-                "post_type": "The type of post",
-                "topic": "Specific domain topic",
-                "goal": "How this closes a specific gap"
-            }}
+           {{ "day": "Monday", "post_type": "...", "topic": "...", "goal": "..." }}
         ],
-        "recommended_days": ["List of recommended days, length matching frequency"],
-        "recommended_time_utc": "Preferred time (e.g. 09:00)",
-        "day_selection_rationale": "Why these days fit the user gap profile",
-        "tone_adjustment": "How to keep professional tone while adding authority and interaction"
+        "recommended_days": ["Mon", "Wed", "Fri"],
+        "recommended_time_utc": "11:00",
+        "day_selection_rationale": "...",
+        "tone_adjustment": "..."
     }},
-    "action_plan": [
-        "Immediate step 1",
-        "Immediate step 2",
-        "Immediate step 3",
-        "Immediate step 4",
-        "Immediate step 5"
-    ],
+    "action_plan": ["Step 1", "Step 2", "Step 3"],
     "reminder_plan": {{
-        "reminder_days": ["List of days matching the posting schedule"],
-        "reminder_time_utc": "Preferred reminder time",
-        "why_this_reminder_cadence": "Why these reminders are needed for consistency"
+        "reminder_days": ["Mon", "Wed", "Fri"],
+        "reminder_time_utc": "11:00"
     }}
 }}
 
-Return ONLY the JSON object, no markdown fences, no extra text.
+Return ONLY the JSON object. No intro, no markdown fences.
 """
 
 async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_data: dict) -> dict[str, Any]:

@@ -764,6 +764,9 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
                     "influencer": influencer,
                     "error": ar_gap.get("error") or "Gap analysis failed for this influencer.",
                 })
+            
+            # Pacing delay to avoid rate limits when processing multiple influencers
+            await asyncio.sleep(1.5)
 
         if not per_influencer_analysis:
             # Diagnostic: Print the actual errors to the terminal

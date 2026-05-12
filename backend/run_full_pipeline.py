@@ -6,7 +6,7 @@ import aiohttp
 from docx import Document
 
 
-API_BASE = "http://localhost:8000/api"
+API_BASE = "https://linked-in-post-2.onrender.com/api"
 API_ROOT = API_BASE.rsplit("/api", 1)[0]
 
 

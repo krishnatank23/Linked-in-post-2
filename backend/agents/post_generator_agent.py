@@ -229,7 +229,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_prompts_text = "No previous prompts (first generation)."
         
         llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.9,
             groq_api_key=_get_groq_api_key(),
             model_kwargs={"response_format": {"type": "json_object"}},

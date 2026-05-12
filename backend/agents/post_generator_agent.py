@@ -265,7 +265,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_types_text = "None"
         
         llm = ChatGroq(
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
             temperature=0.8,
             groq_api_key=_get_groq_api_key(),
             model_kwargs={"response_format": {"type": "json_object"}},
@@ -289,7 +289,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         if normalized_past_posts["count"] > 0:
             try:
                 extractor_llm = ChatGroq(
-                    model="llama-3.1-8b-instant",
+                    model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                     temperature=0.2,
                     groq_api_key=_get_groq_api_key(),
                     model_kwargs={"response_format": {"type": "json_object"}},
@@ -308,15 +308,17 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             except Exception as extraction_error:
                 print(f"[POST GENERATOR] Voice/emotion extraction fallback used: {extraction_error}")
         
+        from agents.markdown_utils import format_profile_markdown_short, format_brand_voice_markdown, format_gap_analysis_markdown
+        
         prompt = ChatPromptTemplate.from_template(POST_GENERATION_PROMPT)
         chain = prompt | llm
         
         response = await guarded_llm_ainvoke(
             chain,
             {
-                "user_profile": json.dumps(user_profile, indent=2),
-                "brand_voice": json.dumps(brand_voice, indent=2),
-                "gap_analysis": json.dumps(gap_analysis, indent=2),
+                "user_profile": format_profile_markdown_short(user_profile),
+                "brand_voice": format_brand_voice_markdown(brand_voice),
+                "gap_analysis": format_gap_analysis_markdown(gap_analysis),
                 "user_past_posts": normalized_past_posts["formatted"],
                 "voice_emotion_signature": json.dumps(voice_emotion_signature, indent=2),
                 "previous_posts": previous_posts_text,

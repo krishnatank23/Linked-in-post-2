@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
 from agents.llm_guard import guarded_llm_ainvoke
 from agents.json_utils import parse_llm_json_content
+from agents.markdown_utils import format_profile_markdown_short, format_brand_voice_markdown, format_influencer_markdown
 
 load_backend_env()
 
@@ -66,19 +67,16 @@ JSON Structure:
 Return ONLY the JSON object. No intro, no markdown fences.
 """
 
-async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_data: dict) -> dict[str, Any]:
+async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_data: dict, user_past_posts: str | None = None) -> dict[str, Any]:
     """
     Agent 4: Perform gap analysis between user and influencer, then generate content strategy.
     """
     try:
-        # Token Optimization: Truncate large inputs to stay within daily limits
-        truncated_profile = {k: v for k, v in user_profile.items() if k in ["personal_info", "experience", "skills", "summary"]}
-        truncated_voice = {k: v for k, v in brand_voice.items() if k in ["identity", "voice_traits", "content_themes"]}
-
         llm = ChatGroq(
             model=os.getenv("GROQ_MODEL_LITE", "llama-3.1-8b-instant"),
-            temperature=0.3,
+            temperature=0.7,
             groq_api_key=_get_groq_api_key(),
+            model_kwargs={"response_format": {"type": "json_object"}},
         )
         
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
@@ -88,9 +86,10 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
         response = await guarded_llm_ainvoke(
             chain,
             {
-                "user_profile": json.dumps(truncated_profile, indent=2)[:4000],
-                "brand_voice": json.dumps(truncated_voice, indent=2)[:2000],
-                "influencer_data": json.dumps(influencer_data, indent=2)[:6000],
+                "user_profile": format_profile_markdown_short(user_profile),
+                "brand_voice": format_brand_voice_markdown(brand_voice),
+                "influencer_data": format_influencer_markdown(influencer_data),
+                "user_past_posts": (user_past_posts or "None provided")[:1000],
             },
             timeout_seconds=90,
         )

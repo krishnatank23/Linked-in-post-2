@@ -189,11 +189,13 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
         chain = prompt | llm
 
+        from agents.markdown_utils import format_profile_markdown_detailed
+        
         print(f"[DEBUG] Brand Voice Agent: Invoking LLM for brand voice generation (timeout: 60s)...")
         response = await guarded_llm_ainvoke(
             chain,
             {
-                "profile_data": json.dumps(parsed_profile, indent=2),
+                "profile_data": format_profile_markdown_detailed(parsed_profile),
                 "industry_context": industry_context[:10000], # Cap to 10k chars
             },
             timeout_seconds=60,

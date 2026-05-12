@@ -33,7 +33,7 @@ const ALL_AGENT_SECTIONS = [
   { title: 'Influencer Analysis', agentMatch: 'Influence' },
   { title: 'Gap Analysis', agentMatch: 'Gap Analysis' },
   { title: 'Posting Recommendation', agentMatch: 'Posting Frequency Recommendation' },
-  { title: 'Post Generation', agentMatch: 'Post Generator' },
+  { title: 'Prompt Generation', agentMatch: 'Prompt Generator' },
 ] as const;
 
 function normalizeStep(stepParam: string | undefined): WorkflowStep {
@@ -92,11 +92,11 @@ export default function WorkflowReviewPage() {
   }, [results]);
 
   const postResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Post Generator')) || null;
+    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Generator')) || null;
   }, [results]);
 
   const deliveryResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Post Delivery')) || null;
+    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Delivery')) || null;
   }, [results]);
 
   const currentResult = orderedSteps[activeStep] || null;

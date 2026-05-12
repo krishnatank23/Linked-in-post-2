@@ -926,20 +926,20 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         ar_posts = await run_post_generation(profile_data, brand_voice, request.gap_analysis_data, request.user_past_posts)
         
         post_agent_result = AgentResult(
-            agent_name="LinkedIn Post Generator",
-            agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+            agent_name="LinkedIn Prompt Generator",
+            agent_description="Generates a strategic prompt for creating LinkedIn posts",
             status=ar_posts["status"],
             output=ar_posts["output"],
             error=ar_posts.get("error"),
         )
 
         if ar_posts["status"] != "success":
-            raise HTTPException(status_code=500, detail=ar_posts.get("error") or "Post generation failed internally.")
+            raise HTTPException(status_code=500, detail=ar_posts.get("error") or "Prompt generation failed internally.")
 
         db.add(AgentOutput(
             user_id=user.id,
-            agent_name="LinkedIn Post Generator",
-            agent_description="Generates humanized and trend-based LinkedIn posts ready to share",
+            agent_name="LinkedIn Prompt Generator",
+            agent_description="Generates a strategic prompt for creating LinkedIn posts",
             status=ar_posts["status"],
             output_data=ar_posts.get("output"),
             error_message=ar_posts.get("error"),
@@ -947,8 +947,26 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         
         results.append(post_agent_result)
         
-        # Update user schedule from model suggestion (or robust fallback strategy).
+        # AUTOMATICALLY SEND THE GENERATED PROMPT VIA EMAIL
+        from agents.email_reminder_agent import run_email_reminder
         out_data = ar_posts.get("output", {})
+        
+        print("[PIPELINE] Automatically dispatching generated prompt to user email...")
+        ar_email = await run_email_reminder(user.email, out_data)
+        
+        if ar_email.get("status") == "success":
+            db.add(AgentOutput(
+                user_id=user.id,
+                agent_name="Email Delivery Agent",
+                agent_description="Automatically sends the generated prompt to the user's email",
+                status=ar_email["status"],
+                output_data=ar_email.get("output"),
+                error_message=ar_email.get("error"),
+            ))
+        else:
+            print(f"[PIPELINE WARNING] Email delivery failed automatically: {ar_email.get('error')}")
+        
+        # Update user schedule from model suggestion (or robust fallback strategy).
         user.posting_schedule = pick_posting_schedule(
             post_output=out_data,
             gap_analysis=request.gap_analysis_data or {},
@@ -958,7 +976,7 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         await db.commit()
 
         return GapAnalysisResponse(
-            message="Post generation completed successfully",
+            message="Prompt generation and automatic email delivery completed successfully",
             results=results
         )
     except Exception as e:
@@ -977,16 +995,22 @@ async def send_reminder_email(request: SendReminderRequest, db: AsyncSession = D
         raise HTTPException(status_code=404, detail="User not found")
 
     posts_payload = request.posts_data or {}
-    posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
-    if not isinstance(posts, list) or not posts:
-        raise HTTPException(status_code=400, detail="No generated posts found to send")
+    generation_type = posts_payload.get("generation_type", "posts") if isinstance(posts_payload, dict) else "posts"
+    
+    if generation_type == "meta_prompt":
+        if not posts_payload.get("post_generation_prompt"):
+            raise HTTPException(status_code=400, detail="No generated prompt found to send")
+    else:
+        posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
+        if not isinstance(posts, list) or not posts:
+            raise HTTPException(status_code=400, detail="No generated posts found to send")
 
     # Enforce HITL order: reminder requires successful post generation first.
     latest_posts = await db.execute(
         select(AgentOutput)
         .where(
             AgentOutput.user_id == user.id,
-            AgentOutput.agent_name == "LinkedIn Post Generator",
+            AgentOutput.agent_name == "LinkedIn Prompt Generator",
             AgentOutput.status == "success",
         )
         .order_by(AgentOutput.created_at.desc())
@@ -1035,15 +1059,21 @@ async def send_post_email(request: SendPostEmailRequest, db: AsyncSession = Depe
         raise HTTPException(status_code=404, detail="User not found")
 
     posts_payload = request.posts_data or {}
-    posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
-    if not isinstance(posts, list) or not posts:
-        raise HTTPException(status_code=400, detail="No generated posts found to send")
+    generation_type = posts_payload.get("generation_type", "posts") if isinstance(posts_payload, dict) else "posts"
+    
+    if generation_type == "meta_prompt":
+        if not posts_payload.get("post_generation_prompt"):
+            raise HTTPException(status_code=400, detail="No generated prompt found to send")
+    else:
+        posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
+        if not isinstance(posts, list) or not posts:
+            raise HTTPException(status_code=400, detail="No generated posts found to send")
 
     latest_posts = await db.execute(
         select(AgentOutput)
         .where(
             AgentOutput.user_id == user.id,
-            AgentOutput.agent_name == "LinkedIn Post Generator",
+            AgentOutput.agent_name == "LinkedIn Prompt Generator",
             AgentOutput.status == "success",
         )
         .order_by(AgentOutput.created_at.desc())
@@ -1064,8 +1094,8 @@ async def send_post_email(request: SendPostEmailRequest, db: AsyncSession = Depe
 
         db.add(AgentOutput(
             user_id=user.id,
-            agent_name="LinkedIn Post Delivery Agent",
-            agent_description="Sends generated LinkedIn posts to the user's registered Outlook inbox",
+            agent_name="LinkedIn Prompt Delivery Agent",
+            agent_description="Sends the generated strategic prompt to the user's registered Outlook inbox",
             status=ar_email["status"],
             output_data=ar_email.get("output"),
             error_message=ar_email.get("error"),
@@ -1073,11 +1103,11 @@ async def send_post_email(request: SendPostEmailRequest, db: AsyncSession = Depe
         await db.commit()
 
         return GapAnalysisResponse(
-            message="Generated posts sent to registered email successfully",
+            message="Generated prompt sent to registered email successfully",
             results=[
                 AgentResult(
-                    agent_name="LinkedIn Post Delivery Agent",
-                    agent_description="Sends generated LinkedIn posts to the user's registered Outlook inbox",
+                    agent_name="LinkedIn Prompt Delivery Agent",
+                    agent_description="Sends the generated strategic prompt to the user's registered Outlook inbox",
                     status=ar_email["status"],
                     output=ar_email.get("output"),
                     error=ar_email.get("error"),

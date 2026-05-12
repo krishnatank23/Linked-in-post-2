@@ -16,153 +16,119 @@ def _get_groq_api_key() -> str | None:
     """Support the Groq API key env var."""
     return os.getenv("GROQ_API_KEY")
 
-POST_GENERATION_PROMPT = """You are a world-class LinkedIn ghostwriter and content strategist with expertise in professional, high-impact domain content.
 
-Your task: Generate EXACTLY 2 completely unique LinkedIn posts tailored to this user's domain and the specific gaps identified in gap analysis. You must decide topics and angles from the gap evidence.
+PROMPT_GENERATION_PROMPT = """You are a world-class LinkedIn content strategist and master of authentic professional branding.
 
-USER PROFILE:
+Your task: Generate a high-impact, strategic, and hyper-personalized prompt that the user can use to generate viral-potential, domain-authoritative LinkedIn posts.
+
+This prompt must be a "Single Master Prompt" that acts as a complete identity and strategy guide. It should capture:
+- The user's exact professional domain and authority positioning
+- Their unique, non-generic voice and emotional resonance
+- Current, trendy industry themes and pattern-interrupting opportunities
+- Specific gaps identified in their content strategy
+- Highly effective hook patterns and engagement triggers specific to their niche
+
+INPUT CONTEXT:
+
+USER PROFESSIONAL PROFILE:
 {user_profile}
 
-BRAND VOICE:
+USER BRAND VOICE & PERSONA:
 {brand_voice}
 
-GAP ANALYSIS & STRATEGY:
+GAP ANALYSIS & CONTENT STRATEGY:
 {gap_analysis}
 
-USER PAST POSTS (FOR EMOTION AND VOICE MATCHING):
+USER'S AUTHENTIC PAST POSTS (FOR VOICE MATCHING):
 {user_past_posts}
 
-EXTRACTED VOICE & EMOTION SIGNATURE (USE THIS AS A HARD STYLE CONSTRAINT):
+VOICE & EMOTION SIGNATURE:
 {voice_emotion_signature}
 
-PREVIOUSLY GENERATED POSTS (STRICT AVOIDANCE):
+PREVIOUSLY GENERATED PROMPTS (AVOID REPEATING):
 {previous_posts}
 
-PREVIOUS POST TYPES USED:
-{previous_types}
-
 ═══════════════════════════════════════════════════════════════════
 
-CRITICAL DEDUPLICATION RULES (YOU MUST FOLLOW STRICTLY):
+YOUR TASK:
 
-1. NEVER use any of these post types again: {previous_types}
-   - If you've used "Educational" before, generate "Storytelling" or "Trend-based" instead
-   - Complete variation is MANDATORY - not just different wording
+Analyze all the above context and generate a detailed, structured output that culminates in a "Master Generation Prompt".
 
-2. AVOID all content from previous posts:
-   - Different topics (not the same subject matter)
-   - Different angles (approach from completely new perspective)
-   - Different stories/examples (no similar case studies or anecdotes)
-   - Different data points (don't reuse statistics or findings)
-   - Different industries/domains (expand beyond what was covered before)
+1. **Hyper-Specific Domain Authority**
+   - Define their niche with surgical precision
+   - Identify the "Trendy" topics and emerging debates in their field right now
+   - Formulate a unique "Contrarian Angle" that sets them apart from the noise
 
-3. AUTONOMOUSLY decide topics:
-   - Analyze the gap and identify 2 COMPLETELY DIFFERENT problem areas
-   - Choose topics the user hasn't covered yet
-   - Select topics that are relevant to closing the identified gaps
-   - Ensure topics complement each other but are distinct
+2. **Authentic Voice & Emotional Signature**
+   - Deeply analyze the provided voice signature and past posts
+   - Capture their exact sentence cadence, vocabulary, and emotional "vibe"
+   - Ensure the voice sounds human, not like an AI generated profile
 
-═══════════════════════════════════════════════════════════════════
-
-POST TYPES (Choose 2 DIFFERENT ones):
-1. Educational/Actionable (How-to, frameworks, technical tips, step-by-step guides)
-2. Storytelling/Personal (Real experience, lessons learned, transformation narrative)
-3. Industry Trends/Analysis (Market news, competitive insight, forward-looking analysis)
-4. Interactive/Engagement (Questions, polls, debates, audience collaboration)
-5. Thought Leadership/Vision (Philosophy, predictions, industry commentary)
-6. Case Study/Results (Success story, metrics, before/after transformation)
-7. Contrarian/Hot Take (Disagree with common wisdom, challenge assumptions)
-8. Inspirational/Motivational (Overcoming challenges, resilience, mindset shifts)
-
-INSTRUCTIONS FOR AUTONOMOUS TOPIC SELECTION:
-
-1. Identify the primary gap from gap analysis (e.g., "User lacks AI adoption thought leadership")
-2. Identify secondary gaps (e.g., "Limited community engagement", "No industry positioning")
-3. Choose Post 1 type to address primary gap with fresh angle
-4. Choose Post 2 type to address secondary gap or explore new domain angle
-5. Ensure the two posts create a complete strategy narrative together
-
-EXAMPLE SCENARIO:
-- Previous posts: 2x Educational (tips, frameworks), 1x Storytelling
-- Gap analysis: Needs thought leadership, needs community engagement
-- YOUR CHOICE: Post 1 = Contrarian/Hot Take, Post 2 = Interactive/Engagement
-- Result: Fresh content that addresses gaps and uses new post types
-
-═══════════════════════════════════════════════════════════════════
-
-DAY & REMINDER STRATEGY RULES (MANDATORY):
-
-1. Choose posting days based on the gap analysis intensity:
-- High consistency/engagement gap: 4-5 posts/week
-- Medium gap: 3-4 posts/week
-- Lower gap: 2-3 posts/week
-
-2. Include explicit rationale for why selected days and time support improvement.
-3. Keep schedule realistic and repeatable for long-term consistency.
-
-═══════════════════════════════════════════════════════════════════
-
-HUMANIZATION & QUALITY RULES (CRITICAL):
-
-- Treat EXTRACTED VOICE & EMOTION SIGNATURE as the primary style guide.
-- Analyze the USER PAST POSTS (if provided) and strictly match the emotion, cadence, sentence structure, and specific vocabulary/phrases the user uses. Maintain their exact authentic voice.
-- SPECIFICITY OVER VAGUENESS: Do not use broad generalizations. Use highly specific scenarios, domain-specific terminology, and relatable pain points drawn from the user's profile and gap analysis.
-- WRITE LIKE YOU TALK: Write like a human having a smart, casual conversation with peers over coffee.
-- FORMATTING: Use generous white space. Keep paragraphs to 1-3 sentences maximum. Use line breaks to create a reading rhythm.
-- NO AI SPEAK: Do NOT use phrases like "In today's fast-paced digital world," "It's more important than ever," or "Navigating the complexities of..."
-- BANNED WORDS: 'leverage', 'streamline', 'delve', 'tapestry', 'unleash', 'empower', 'synergy', 'testament', 'pivotal'.
-- DO NOT use em dashes (—), use commas or periods instead.
-- NO EMOJIS in the post content under any circumstances.
-- Speak directly to the USER's specific target audience and address their exact problems.
-
-HOOK & ENGAGEMENT (THE FIRST 3 LINES):
-- Line 1 (The Hook): A bold claim, a counter-intuitive thought, a stark metric, or a direct pattern-interrupt. MUST be under 12 words.
-- Line 2 (The Re-Hook): Provide context or build tension immediately.
-- Line 3: Transition smoothly into the core story or lesson.
-- The Ending: End with a highly specific, single question that requires a thoughtful answer (not a simple "yes/no" or "What do you think?").
-- Focus on providing immense, actionable value to the reader.
-
-═══════════════════════════════════════════════════════════════════
+3. **Master Strategy Prompt**
+   - Create a 600-800 word comprehensive prompt that the user can paste into any LLM
+   - This prompt should instruct the LLM to act as the user's "Chief of Staff and Master Ghostwriter"
+   - It must include specific rules on what to avoid (AI clichés) and what to double down on (authenticity)
 
 OUTPUT FORMAT (JSON ONLY):
 
 {{
-    "posting_frequency": "3 posts per week",
-    "posting_schedule_days": ["Monday", "Wednesday", "Friday"],
-    "posting_time_utc": "11:00",
-    "posting_schedule_rationale": "Why these days and time were chosen based on identified gaps",
-    "autonomous_topic_selection_rationale": {{
-        "primary_gap_addressed": "Explanation of what gap post 1 addresses",
-        "secondary_gap_addressed": "Explanation of what gap post 2 addresses",
-        "why_these_types": "Why these 2 post types were chosen over others"
-    }},
-    "posts": [
+    "user_domain": "The user's primary professional domain and authority niche",
+    "user_positioning": "Their unique, trendy positioning within the domain (2-3 sentences)",
+    "target_audience": "Who they should be speaking to (be specific and demographic-focused)",
+    "authentic_voice_profile": "A master summary of their voice, tone, and emotional signature (3-4 sentences)",
+    "current_domain_trends": [
+        "Trendy industry topic 1 (High engagement potential)",
+        "Trendy industry topic 2",
+        "Trendy industry topic 3",
+        "Emerging challenge 1",
+        "Emerging challenge 2"
+    ],
+    "posting_frequency": "Recommended frequency (e.g., '4 high-impact posts per week')",
+    "posting_schedule_days": ["Monday", "Tuesday", "Thursday", "Friday"],
+    "posting_time_utc": "Optimal posting time (e.g., '13:00')",
+    "content_strategy_pillars": [
         {{
-            "type": "First post type chosen",
-            "topic": "Specific topic title",
-            "reasoning": "Why this topic was chosen based on gaps and domain",
-            "interaction_goal": "What engagement behavior this post is trying to create",
-            "content": "Full, complete post text (minimum 3-5 paragraphs)"
+            "pillar": "Authority Building / Thought Leadership",
+            "focus": "Addressing [Specific Gap]",
+            "why_important": "Why this closes their specific authority gap"
         }},
         {{
-            "type": "Second post type chosen (MUST BE DIFFERENT FROM FIRST)",
-            "topic": "Completely different specific topic",
-            "reasoning": "Why this topic complements the first and addresses different aspect",
-            "interaction_goal": "What engagement behavior this post is trying to create",
-            "content": "Full, complete post text (minimum 3-5 paragraphs)"
+            "pillar": "...",
+            "focus": "...",
+            "why_important": "..."
         }}
+    ],
+    "post_generation_prompt": "A world-class, comprehensive prompt (600-800 words) that captures EVERYTHING. It should begin with: 'Act as a senior LinkedIn ghostwriter for [User Name]...' and include: \\n- A deep breakdown of their domain authority\\n- A strict 'Style & Voice Guide' based on their past posts\\n- 5-7 specific 'Content Angles' that are currently trending\\n- A 'Banned Words' list to avoid AI-sounding content\\n- A 'Hook Library' specific to their audience\\n- Instructions for maintaining emotional authenticity\\n- A framework for closing the specific gaps identified in the analysis.",
+    "dos_and_donts": {{
+        "do_list": [
+            "Specific trendy action for their domain",
+            "Authentic voice guidance",
+            "Specific hook strategy",
+            "etc..."
+        ],
+        "dont_list": [
+            "Banned AI cliché",
+            "Off-brand tone marker",
+            "Ineffective engagement tactic",
+            "etc..."
+        ]
+    }},
+    "suggested_post_topics": [
+        "Actionable trendy topic 1",
+        "Actionable trendy topic 2",
+        "Actionable trendy topic 3",
+        "etc..."
+    ],
+    "engagement_triggers": [
+        "Niche-specific engagement question 1",
+        "Niche-specific engagement question 2",
+        "etc..."
     ]
 }}
 
-REQUIREMENTS:
-1. EXACTLY 2 posts (not more, not less)
-2. Each post type MUST be different from the first
-3. Posts MUST be completely different from any previous posts
-4. NO repeated post types from {previous_types}
-5. Topics autonomously chosen based on gap analysis and domain knowledge
-6. Full post content included (not summaries, not outlines)
+Make the prompt incredibly detailed. It should feel like a 'Bible' for their LinkedIn brand. Use trendy, modern terminology and ensure the advice is pattern-interrupting and bold.
 
-Return ONLY valid JSON. No markdown, no explanations, no code fences.
+Return ONLY valid JSON. No markdown fences.
 """
 
 
@@ -216,57 +182,55 @@ def _prepare_recent_posts(user_past_posts: str | None) -> dict[str, Any]:
     }
 
 
-
-
-
 async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict, user_past_posts: str | None = None) -> dict[str, Any]:
     """
-    Agent 5: Generate EXACTLY 2 unique LinkedIn posts based on gap analysis and brand voice.
-    Autonomously decides topics and ensures complete variation from previous posts.
+    Agent 5: Generate a comprehensive prompt for LinkedIn post generation based on all previous agents.
     """
     try:
-        # Fetch previous posts and their types for deduplication
-        previous_posts_text = ""
-        previous_types_text = "None (first generation)"
+        # Fetch previous prompts for context to avoid repetition
+        previous_prompts_text = ""
         user_id = _current_user_id.get()
         
         if user_id:
             try:
                 from database import async_session
-                from models import LinkedInPost
+                from models import AgentOutput
                 from sqlalchemy import select
                 
                 async with async_session() as db:
                     result = await db.execute(
-                        select(LinkedInPost).where(LinkedInPost.user_id == user_id).order_by(LinkedInPost.created_at.desc()).limit(10)
+                        select(AgentOutput)
+                        .where(
+                            AgentOutput.user_id == user_id,
+                            AgentOutput.agent_name == "LinkedIn Prompt Generator",
+                            AgentOutput.status == "success"
+                        )
+                        .order_by(AgentOutput.created_at.desc())
+                        .limit(5)
                     )
-                    previous_posts = result.scalars().all()
+                    previous_outputs = result.scalars().all()
                     
-                    if previous_posts:
-                        posts_list = []
-                        types_list = []
-                        for post in previous_posts:
-                            posts_list.append(f"- Type: {post.post_type}\n  Goal: {post.goal}\n  Content Preview: {post.content[:150]}...")
-                            if post.post_type not in types_list:
-                                types_list.append(post.post_type)
+                    if previous_outputs:
+                        prompts_list = []
+                        for out in previous_outputs:
+                            out_data = out.output_data or {}
+                            p_text = out_data.get("post_generation_prompt", "")
+                            if p_text:
+                                prompts_list.append(f"Previously Generated Prompt:\n{p_text[:200]}...")
                         
-                        previous_posts_text = "\n".join(posts_list) if posts_list else "No previous posts found."
-                        previous_types_text = ", ".join(types_list) if types_list else "None"
-                        print(f"[POST GENERATOR] Found {len(previous_posts)} previous posts with types: {previous_types_text}")
+                        previous_prompts_text = "\n\n".join(prompts_list) if prompts_list else "No previous prompts found."
+                        print(f"[PROMPT GENERATOR] Found {len(previous_outputs)} previous prompts for context.")
                     else:
-                        previous_posts_text = "No previous posts found."
-                        previous_types_text = "None"
+                        previous_prompts_text = "No previous prompts found."
             except Exception as e:
-                print(f"[POST GENERATOR] Warning: Could not fetch previous posts: {e}")
-                previous_posts_text = "No previous posts available."
-                previous_types_text = "Unknown"
+                print(f"[PROMPT GENERATOR] Warning: Could not fetch previous prompts: {e}")
+                previous_prompts_text = "No previous prompts available."
         else:
-            previous_posts_text = "No previous posts (first generation)."
-            previous_types_text = "None"
+            previous_prompts_text = "No previous prompts (first generation)."
         
         llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
-            temperature=0.8,
+            model=os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+            temperature=0.9,
             groq_api_key=_get_groq_api_key(),
             model_kwargs={"response_format": {"type": "json_object"}},
         )
@@ -308,21 +272,23 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             except Exception as extraction_error:
                 print(f"[POST GENERATOR] Voice/emotion extraction fallback used: {extraction_error}")
         
-        from agents.markdown_utils import format_profile_markdown_short, format_brand_voice_markdown, format_gap_analysis_markdown
+        # Prepare inputs
+        from .markdown_utils import format_profile_markdown_short
+        short_profile = format_profile_markdown_short(user_profile)
         
-        prompt = ChatPromptTemplate.from_template(POST_GENERATION_PROMPT)
-        chain = prompt | llm
+        # Use PROMPT_GENERATION_PROMPT instead - this generates a meta-prompt for post generation
+        llm_prompt = ChatPromptTemplate.from_template(PROMPT_GENERATION_PROMPT)
+        chain = llm_prompt | llm
         
         response = await guarded_llm_ainvoke(
             chain,
             {
-                "user_profile": format_profile_markdown_short(user_profile),
-                "brand_voice": format_brand_voice_markdown(brand_voice),
-                "gap_analysis": format_gap_analysis_markdown(gap_analysis),
+                "user_profile": short_profile,
+                "brand_voice": json.dumps(brand_voice, indent=2),
+                "gap_analysis": json.dumps(gap_analysis, indent=2),
                 "user_past_posts": normalized_past_posts["formatted"],
                 "voice_emotion_signature": json.dumps(voice_emotion_signature, indent=2),
-                "previous_posts": previous_posts_text,
-                "previous_types": previous_types_text,
+                "previous_posts": previous_prompts_text,
             },
             timeout_seconds=90,
         )
@@ -332,41 +298,39 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             return {
                 "status": "error",
                 "output": None,
-                "error": "The AI model returned an empty response during post generation. Please try again.",
+                "error": "The AI model returned an empty response during prompt generation. Please try again.",
             }
 
-        post_results = parse_llm_json_content(content)
-        if not isinstance(post_results, dict):
-            print(f"[POST GENERATOR ERROR] Failed to parse JSON. Raw LLM output: {content}")
-            raise json.JSONDecodeError(f"Post generator output was not a valid JSON object. Raw output: {content[:200]}...", content, 0)
-        if isinstance(post_results, dict):
-            post_results["voice_emotion_analysis"] = voice_emotion_signature
-            post_results["user_past_posts_used_count"] = normalized_past_posts["count"]
+        prompt_results = parse_llm_json_content(content)
+        print(f"[PROMPT GENERATOR] Raw content length: {len(content)}")
         
-        # Validate that we got exactly 2 posts
-        posts = post_results.get("posts", [])
-        if len(posts) != 2:
-            print(f"[POST GENERATOR] Warning: Expected 2 posts but got {len(posts)}. Adjusting...")
-            if len(posts) > 2:
-                post_results["posts"] = posts[:2]
-            elif len(posts) == 1:
-                # If only 1 post, duplicate with variation instruction not ideal, but keep as is
-                pass
+        if not isinstance(prompt_results, dict):
+            print(f"[PROMPT GENERATOR ERROR] Output is not a dict. Type: {type(prompt_results)}")
+            # If it's a string, try to wrap it in a dict for the UI
+            if isinstance(prompt_results, str):
+                prompt_results = {
+                    "post_generation_prompt": prompt_results,
+                    "user_domain": "Extracted from text",
+                    "status_note": "Unstructured output from LLM"
+                }
+            else:
+                raise json.JSONDecodeError(f"Prompt generator output was not a valid JSON object. Raw output: {content[:200]}...", content, 0)
         
-        print(
-            f"[POST GENERATOR] Generated {len(post_results.get('posts', []))} posts with types: "
-            f"{[p.get('type') for p in post_results.get('posts', [])]} | "
-            f"voice posts used: {normalized_past_posts['count']}"
-        )
+        # Enrich the output with metadata
+        prompt_results["voice_emotion_signature"] = voice_emotion_signature
+        prompt_results["user_past_posts_used_count"] = normalized_past_posts["count"]
+        prompt_results["generation_type"] = "meta_prompt"
+        
+        print(f"[PROMPT GENERATOR] Success. Domain: {prompt_results.get('user_domain')}")
         
         return {
             "status": "success",
-            "output": post_results,
+            "output": prompt_results,
             "error": None,
         }
     except Exception as e:
         return {
             "status": "error",
             "output": None,
-            "error": f"Post generation failed: {str(e)}\n{traceback.format_exc()}",
+            "error": f"Post prompt generation failed: {str(e)}\n{traceback.format_exc()}",
         }

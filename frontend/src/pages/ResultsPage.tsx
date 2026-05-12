@@ -42,11 +42,11 @@ export default function ResultsPage() {
   };
 
   const latestPostResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Post Generator')) || null;
+    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Generator')) || null;
   }, [results]);
 
   const latestDeliveryResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Post Delivery')) || null;
+    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Delivery')) || null;
   }, [results]);
 
   const sendGeneratedPosts = async () => {
@@ -99,7 +99,7 @@ export default function ResultsPage() {
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
                 <Sparkles size={20} />
               </div>
-              <h1 className="text-2xl font-bold">PostPilot Studio Results</h1>
+              <h1 className="text-2xl font-bold">PromptPilot Studio Results</h1>
             </div>
             <p className="text-[#1c1a17]/50">Full agent output history for {user?.username || 'your account'}.</p>
           </div>
@@ -131,10 +131,10 @@ export default function ResultsPage() {
               <section className={`${glassCard} p-6 md:p-7`}>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Post Delivery</div>
-                    <h2 className="font-heading text-2xl font-semibold">Send this post to {user?.email || 'your registered email'}</h2>
+                    <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Prompt Delivery</div>
+                    <h2 className="font-heading text-2xl font-semibold">Send this prompt to {user?.email || 'your registered email'}</h2>
                     <p className="text-[#1c1a17]/55 mt-2 leading-7">
-                      The generated LinkedIn posts will be emailed from the Outlook sender account after you click the button below.
+                      The generated LinkedIn prompt will be emailed from the Outlook sender account after you click the button below.
                     </p>
                   </div>
                   <button
@@ -142,7 +142,7 @@ export default function ResultsPage() {
                     disabled={sendingEmail}
                     className={`${btnPrimary} gap-2 whitespace-nowrap`}
                   >
-                    {sendingEmail ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} Send this post to email
+                    {sendingEmail ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} Send this prompt to email
                   </button>
                 </div>
                 {latestDeliveryResult ? (

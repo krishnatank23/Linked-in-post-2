@@ -392,39 +392,119 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
       );
     }
 
-    if (agentName.includes('Post Generator')) {
-      const posts = asArray(output.posts);
+    if (agentName.includes('Prompt Generator') || agentName.includes('Post Generator')) {
       const scheduledDays = asArray(output.posting_schedule_days).map((day) => String(day));
+      const prompt = output.post_generation_prompt || '';
+      const topics = asArray(output.suggested_post_topics);
+      const triggers = asArray(output.engagement_triggers);
+      const trends = asArray(output.current_domain_trends);
+      const dosList = output.dos_and_donts?.do_list || [];
+      const dontsList = output.dos_and_donts?.dont_list || [];
+      
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <StatCard label="Posting Frequency" value={output.posting_frequency || 'N/A'} icon={BarChart3} />
             <StatCard label="Scheduled Days" value={scheduledDays.join(', ') || 'N/A'} icon={Clock3} />
           </div>
-          <div className="space-y-3">
-            {posts.slice(0, 3).map((post: any, idx: number) => (
-              <div key={idx} className="p-4 rounded-2xl bg-black/5 border border-black/10">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="font-semibold text-[#1c1a17]">{post.type || `Post ${idx + 1}`}</div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(post.content || '');
-                      toast.success('Post copied to clipboard');
-                    }}
-                    className="text-xs px-3 py-1 rounded-full bg-black/10 border border-black/10 text-[#1c1a17]/70 hover:bg-black/20"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <p className="text-sm text-[#1c1a17]/70 leading-7 whitespace-pre-wrap">{post.content || 'Drafting your post...'}</p>
+          
+          {/* Main Prompt Section */}
+          {prompt && (
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="font-semibold text-[#1c1a17]">Post Generation Prompt</div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(prompt);
+                    toast.success('Prompt copied to clipboard');
+                  }}
+                  className="text-xs px-3 py-1 rounded-full bg-black/10 border border-black/10 text-[#1c1a17]/70 hover:bg-black/20"
+                >
+                  Copy Prompt
+                </button>
               </div>
-            ))}
-          </div>
+              <p className="text-sm text-[#1c1a17]/70 leading-7 whitespace-pre-wrap max-h-64 overflow-y-auto">{prompt}</p>
+            </div>
+          )}
+          
+          {/* Suggested Topics */}
+          {topics.length > 0 && (
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
+              <div className="font-semibold text-[#1c1a17] mb-3">Suggested Post Topics</div>
+              <ul className="space-y-2">
+                {topics.map((topic: any, idx: number) => (
+                  <li key={idx} className="text-sm text-[#1c1a17]/70 flex items-start gap-2">
+                    <span className="text-[#1c1a17]/50 mt-1">•</span>
+                    <span>{String(topic)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* Domain Trends */}
+          {trends.length > 0 && (
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
+              <div className="font-semibold text-[#1c1a17] mb-3">Current Domain Trends</div>
+              <ul className="space-y-2">
+                {trends.map((trend: any, idx: number) => (
+                  <li key={idx} className="text-sm text-[#1c1a17]/70 flex items-start gap-2">
+                    <span className="text-[#1c1a17]/50 mt-1">•</span>
+                    <span>{String(trend)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* Do's and Don'ts */}
+          {(dosList.length > 0 || dontsList.length > 0) && (
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
+              <div className="font-semibold text-[#1c1a17] mb-3">Do's and Don'ts</div>
+              <div className="space-y-3">
+                {dosList.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-green-700 mb-2">✓ DO:</div>
+                    <ul className="space-y-1">
+                      {dosList.map((item: any, idx: number) => (
+                        <li key={idx} className="text-sm text-[#1c1a17]/70 ml-3">• {String(item)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {dontsList.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-red-700 mb-2">✗ DON'T:</div>
+                    <ul className="space-y-1">
+                      {dontsList.map((item: any, idx: number) => (
+                        <li key={idx} className="text-sm text-[#1c1a17]/70 ml-3">• {String(item)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Engagement Triggers */}
+          {triggers.length > 0 && (
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
+              <div className="font-semibold text-[#1c1a17] mb-3">Engagement Triggers</div>
+              <ul className="space-y-2">
+                {triggers.map((trigger: any, idx: number) => (
+                  <li key={idx} className="text-sm text-[#1c1a17]/70 flex items-start gap-2">
+                    <span className="text-[#1c1a17]/50 mt-1">•</span>
+                    <span>{String(trigger)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       );
     }
 
-    if (agentName.includes('Post Delivery') || agentName.includes('Email Reminder')) {
+    if (agentName.includes('Prompt Delivery') || agentName.includes('Post Delivery') || agentName.includes('Email Reminder')) {
       const recipient = output.recipient || output.to || 'registered user email';
       const postsCount = output.posts_count ?? asArray(output.posts).length;
       return (

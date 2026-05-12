@@ -69,21 +69,21 @@ const PIPELINE_STEPS: PipelineStep[] = [
   },
   {
     id: 'posts',
-    label: 'Post Generator',
-    shortLabel: 'Posts',
+    label: 'Prompt Generator',
+    shortLabel: 'Prompt',
     icon: PenTool,
     color: '#c9714f',
     glowColor: 'rgba(201,113,79,0.18)',
-    description: 'Crafts your LinkedIn content',
+    description: 'Crafts your strategic LinkedIn prompt',
   },
   {
     id: 'delivery',
-    label: 'Post Delivery',
+    label: 'Prompt Delivery',
     shortLabel: 'Deliver',
     icon: Mail,
     color: '#7a9e87',
     glowColor: 'rgba(122,158,135,0.18)',
-    description: 'Sends posts to your inbox',
+    description: 'Sends the prompt to your inbox',
   },
 ];
 
@@ -150,7 +150,7 @@ export default function StudioPage() {
         setResults(all);
         const infRes = all.find((r: any) => r.agent_name?.includes('Influence'));
         setInfluencers(infRes?.output?.influencers || []);
-        setPostResults(all.filter((r: any) => String(r.agent_name || '').includes('Post Generator')));
+        setPostResults(all.filter((r: any) => String(r.agent_name || '').includes('Prompt Generator')));
       } catch {
         setResults([]);
       }
@@ -249,7 +249,7 @@ export default function StudioPage() {
       if (idx === 2) return getLatestResult('Influence') ? 'complete' : 'idle';
       if (idx === 3) return gapAnalysisData ? 'complete' : 'idle';
       if (idx === 4) return postResults.length > 0 ? 'complete' : 'idle';
-      if (idx === 5) return results.some(r => String(r.agent_name || '').includes('Post Delivery')) ? 'complete' : 'idle';
+      if (idx === 5) return results.some(r => String(r.agent_name || '').includes('Prompt Delivery')) ? 'complete' : 'idle';
       return 'idle';
     });
   }, [results, loadingPipeline, runningStepIdx, gapAnalysisData, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
@@ -260,13 +260,13 @@ export default function StudioPage() {
     if (activeStepIdx === 1) return getLatestResult('Brand Voice');
     if (activeStepIdx === 2) return getLatestResult('Influence');
     if (activeStepIdx === 3) return results.find(r => String(r.agent_name || '').includes('Gap Analysis')) || null;
-    if (activeStepIdx === 4) return postResults[postResults.length - 1] || results.find(r => String(r.agent_name || '').includes('Post Generator')) || null;
-    if (activeStepIdx === 5) return results.find(r => String(r.agent_name || '').includes('Post Delivery')) || null;
+    if (activeStepIdx === 4) return postResults[postResults.length - 1] || results.find(r => String(r.agent_name || '').includes('Prompt Generator')) || null;
+    if (activeStepIdx === 5) return results.find(r => String(r.agent_name || '').includes('Prompt Delivery')) || null;
     return null;
   }, [activeStepIdx, results, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
 
   const latestGeneratedPostOutput = useMemo(() => {
-    const r = [...postResults].reverse().find(r => String(r.agent_name || '').includes('Post Generator'));
+    const r = [...postResults].reverse().find(r => String(r.agent_name || '').includes('Prompt Generator'));
     return r?.output || null;
   }, [postResults]);
 
@@ -390,12 +390,12 @@ export default function StudioPage() {
     setSelectedInfluencers(prev => {
       const key = inf.link || inf.title;
       const isCurrentlySelected = prev.some(i => (i.link || i.title) === key);
-      
+
       if (!isCurrentlySelected && prev.length >= 3) {
         toast.error('You can only select up to 3 influencers at a time to stay within limits.');
         return prev;
       }
-      
+
       return isCurrentlySelected
         ? prev.filter(i => (i.link || i.title) !== key)
         : [...prev, inf];
@@ -562,7 +562,7 @@ export default function StudioPage() {
           : activeStepIdx === 2
             ? (runningGap ? 'Analyzing…' : 'Gap Analysis')
             : activeStepIdx === 3
-              ? (generatingPosts ? 'Generating…' : 'Generate Posts')
+              ? (generatingPosts ? 'Generating…' : 'Generate Prompt')
               : activeStepIdx === 4
                 ? (sendingPostEmail ? 'Sending…' : 'Send Email')
                 : activeStepIdx < PIPELINE_STEPS.length - 1
@@ -1001,9 +1001,9 @@ export default function StudioPage() {
                           <div className="font-semibold text-[#1c1a17]/35 mb-1">No output yet</div>
                           <div className="text-sm max-w-xs" style={{ color: 'rgba(90,85,80,0.45)' }}>
                             {activeStepIdx === 0 ? 'Click "Run Resume Parser" in the sidebar to start.' :
-                              activeStepIdx === 3 ? 'Select influencers (Step 3), then run Gap Analysis below.' :
-                                activeStepIdx === 4 ? 'Complete Gap Analysis (Step 4) first, then generate posts below.' :
-                                  activeStepIdx === 5 ? 'Generate posts (Step 5) first, then send to email below.' :
+                              activeStepIdx === 2 ? 'Select influencers (Step 3), then run Gap Analysis below.' :
+                                activeStepIdx === 3 ? 'Complete Gap Analysis (Step 4) first, then generate prompt below.' :
+                                  activeStepIdx === 4 ? 'Generate prompt (Step 5) first, then send to email below.' :
                                     'Run the pipeline first.'}
                           </div>
                         </div>
@@ -1244,7 +1244,7 @@ export default function StudioPage() {
                   <div className="text-sm" style={{ color: 'rgba(90,85,80,0.7)' }}>
                     {latestGeneratedPostOutput
                       ? `Deliver generated posts to ${user?.email}. Use the bottom-right button to send them.`
-                      : 'Generate posts first to unlock email delivery.'}
+                      : 'Generate prompt first to unlock email delivery.'}
                   </div>
                 </motion.div>
               )}

@@ -30,6 +30,14 @@ app = FastAPI(
     # lifespan=lifespan,
 )
 
+@app.get("/")
+async def home():
+    return {"message": "Backend is running"}
+
+@app.get("/test")
+async def test():
+    return {"status": "ok"}
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 

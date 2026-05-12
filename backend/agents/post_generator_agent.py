@@ -266,8 +266,9 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         
         llm = ChatGroq(
             model="llama3-8b-8192",
-            temperature=0.8,  # Slightly higher for more creative autonomy
+            temperature=0.8,
             groq_api_key=_get_groq_api_key(),
+            model_kwargs={"response_format": {"type": "json_object"}},
         )
 
         # First extract a deterministic voice/emotion signature from pasted posts.
@@ -291,6 +292,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                     model="llama3-8b-8192",
                     temperature=0.2,
                     groq_api_key=_get_groq_api_key(),
+                    model_kwargs={"response_format": {"type": "json_object"}},
                 )
                 extractor_prompt = ChatPromptTemplate.from_template(VOICE_EMOTION_EXTRACTION_PROMPT)
                 extractor_chain = extractor_prompt | extractor_llm
@@ -333,7 +335,8 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
 
         post_results = parse_llm_json_content(content)
         if not isinstance(post_results, dict):
-            raise json.JSONDecodeError("Post generator output was not a JSON object", str(post_results), 0)
+            print(f"[POST GENERATOR ERROR] Failed to parse JSON. Raw LLM output: {content}")
+            raise json.JSONDecodeError(f"Post generator output was not a valid JSON object. Raw output: {content[:200]}...", content, 0)
         if isinstance(post_results, dict):
             post_results["voice_emotion_analysis"] = voice_emotion_signature
             post_results["user_past_posts_used_count"] = normalized_past_posts["count"]

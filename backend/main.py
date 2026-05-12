@@ -27,7 +27,7 @@ app = FastAPI(
     title="LinkedIn Personal Branding Assistant",
     description="Agentic AI pipeline for resume analysis and personal brand generation",
     version="2.0.0",
-    lifespan=lifespan,
+    # lifespan=lifespan,
 )
 
 from fastapi import Request, Response

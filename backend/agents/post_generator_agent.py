@@ -265,7 +265,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
             previous_types_text = "None"
         
         llm = ChatGroq(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             temperature=0.8,
             groq_api_key=_get_groq_api_key(),
             model_kwargs={"response_format": {"type": "json_object"}},
@@ -289,7 +289,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         if normalized_past_posts["count"] > 0:
             try:
                 extractor_llm = ChatGroq(
-                    model="llama3-8b-8192",
+                    model="llama-3.1-8b-instant",
                     temperature=0.2,
                     groq_api_key=_get_groq_api_key(),
                     model_kwargs={"response_format": {"type": "json_object"}},

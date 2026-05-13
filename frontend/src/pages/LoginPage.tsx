@@ -84,7 +84,17 @@ export default function LoginPage() {
         </div>
 
         <div className="glass" style={{ padding: '40px' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form autoComplete="off" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Dummy hidden field to discourage browser autofill managers */}
+            <input
+              type="text"
+              name="prevent_autofill"
+              autoComplete="off"
+              tabIndex={-1}
+              value={''}
+              readOnly
+              style={{ position: 'absolute', opacity: 0, height: 0, width: 0, border: 0, padding: 0, margin: 0 }}
+            />
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-mid)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Email address
@@ -93,11 +103,13 @@ export default function LoginPage() {
                 <div style={iconWrap}><Mail size={18} color="var(--text-light)" /></div>
                 <input
                   id="login-email"
+                  name="login_email"
                   type="email"
                   placeholder="name@company.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  autoComplete="off"
                   style={fieldStyle}
                 />
               </div>
@@ -111,11 +123,13 @@ export default function LoginPage() {
                 <div style={iconWrap}><KeyRound size={18} color="var(--text-light)" /></div>
                 <input
                   id="login-password"
+                  name="login_password"
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                   style={fieldStyle}
                 />
               </div>

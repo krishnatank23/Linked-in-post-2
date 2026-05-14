@@ -40,7 +40,7 @@ Extract the following information in a structured JSON format:
         "linkedin_url": "...",
         "portfolio_url": "..."
     }},
-    "professional_summary": "A brief professional summary from the resume",
+    "professional_summary": "A brief professional summary from the resume. IF there is no explicit summary in the resume, YOU MUST read the rest of the resume and write a concise, highly accurate 2-3 sentence summary about the user.",
     "experience": [
         {{
             "company": "...",
@@ -80,7 +80,8 @@ Extract the following information in a structured JSON format:
     "expertise_areas": ["..."]
 }}
 
-If any field is not found in the resume, use null or an empty array.
+If any field is not found in the resume, use null or an empty array. 
+EXCEPTION: For "professional_summary", if it is missing, you MUST synthesize an accurate one yourself based on their experience and skills. Do NOT return null for the summary.
 Be thorough and extract every possible detail.
 
 Resume Text:

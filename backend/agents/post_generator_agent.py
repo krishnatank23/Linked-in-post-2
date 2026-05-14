@@ -70,10 +70,9 @@ Analyze all the above context and generate a detailed, structured output that cu
    - Capture their exact sentence cadence, vocabulary, and emotional "vibe"
    - Ensure the voice sounds human, not like an AI generated profile
 
-3. **Master Strategy Prompt**
-   - Create a 600-800 word comprehensive prompt that the user can paste into any LLM
-   - This prompt should instruct the LLM to act as the user's "Chief of Staff and Master Ghostwriter"
-   - It must include specific rules on what to avoid (AI clichés) and what to double down on (authenticity)
+3. **Single Actionable Prompt**
+   - Create a concise, ready-to-copy prompt that combines a specific topic, trend, and trigger.
+   - This should be a direct command to an LLM to write a single post, NOT a massive 800-word identity guide.
 
 OUTPUT FORMAT (JSON ONLY):
 
@@ -83,11 +82,8 @@ OUTPUT FORMAT (JSON ONLY):
     "target_audience": "Who they should be speaking to (be specific and demographic-focused)",
     "authentic_voice_profile": "A master summary of their voice, tone, and emotional signature (3-4 sentences)",
     "current_domain_trends": [
-        "Trendy industry topic 1 (High engagement potential)",
-        "Trendy industry topic 2",
-        "Trendy industry topic 3",
-        "Emerging challenge 1",
-        "Emerging challenge 2"
+        "Trendy industry topic 1",
+        "Trendy industry topic 2"
     ],
     "posting_frequency": "Recommended frequency (e.g., '4 high-impact posts per week')",
     "posting_schedule_days": ["Monday", "Tuesday", "Thursday", "Friday"],
@@ -104,7 +100,7 @@ OUTPUT FORMAT (JSON ONLY):
             "why_important": "..."
         }}
     ],
-    "post_generation_prompt": "A world-class, comprehensive prompt (600-800 words) that captures EVERYTHING. It should begin with: 'Act as a senior LinkedIn ghostwriter for [User Name]...' and include: \\n- A deep breakdown of their domain authority\\n- A strict 'Style & Voice Guide' based on their past posts\\n- 5-7 specific 'Content Angles' that are currently trending\\n- A 'Banned Words' list to avoid AI-sounding content\\n- A 'Hook Library' specific to their audience\\n- Instructions for maintaining emotional authenticity\\n- A framework for closing the specific gaps identified in the analysis.",
+    "post_generation_prompt": "A single, highly concise, ready-to-copy prompt that the user can immediately paste into an AI to generate ONE post. It MUST combine ONE of the suggested topics, ONE of the domain trends, and ONE of the engagement triggers. Do NOT generate a massive 800-word essay. Format it exactly like this: 'Act as a top-tier LinkedIn thought leader in [User Domain]. Write an engaging, professional post about [Topic 1], discussing the impact of [Trend 1]. Use the following hook: [Trigger 1]. Maintain my authentic voice...' Keep it practical and direct.",
     "dos_and_donts": {{
         "do_list": [
             "Specific trendy action for their domain",
@@ -121,14 +117,11 @@ OUTPUT FORMAT (JSON ONLY):
     }},
     "suggested_post_topics": [
         "Actionable trendy topic 1",
-        "Actionable trendy topic 2",
-        "Actionable trendy topic 3",
-        "etc..."
+        "Actionable trendy topic 2"
     ],
     "engagement_triggers": [
         "Niche-specific engagement question 1",
-        "Niche-specific engagement question 2",
-        "etc..."
+        "Niche-specific engagement question 2"
     ]
 }}
 

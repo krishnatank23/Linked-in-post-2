@@ -2,7 +2,7 @@ import os
 import re
 import traceback
 from typing import Any
-from PyPDF2 import PdfReader
+import fitz
 from docx import Document
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -85,13 +85,11 @@ Return ONLY the JSON object, no markdown fences, no extra text.
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """Extract text from a PDF file."""
-    reader = PdfReader(file_path)
+    """Extract text from a PDF file using PyMuPDF (fitz)."""
     text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
+    with fitz.open(file_path) as doc:
+        for page in doc:
+            text += page.get_text() + "\n"
     return text.strip()
 
 

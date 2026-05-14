@@ -3,6 +3,7 @@ import json
 import re
 import traceback
 from typing import Any
+from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
@@ -10,6 +11,11 @@ from agents.llm_guard import guarded_llm_ainvoke, _current_user_id
 from agents.json_utils import parse_llm_json_content
 
 load_backend_env()
+
+
+def _get_deepseek_api_key() -> str | None:
+    """Support the DeepSeek API key env var."""
+    return os.getenv("DEEPSEEK_API_KEY")
 
 
 def _get_groq_api_key() -> str | None:
@@ -228,12 +234,23 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         else:
             previous_prompts_text = "No previous prompts (first generation)."
         
-        llm = ChatGroq(
+        primary_llm = ChatOpenAI(
+            model=os.getenv("POST_GENERATOR_MODEL", "deepseek-v4-flash"),
+            temperature=0.9,
+            openai_api_key=_get_deepseek_api_key(),
+            base_url="https://api.deepseek.com",
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+
+        fallback_llm = ChatGroq(
             model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.9,
             groq_api_key=_get_groq_api_key(),
             model_kwargs={"response_format": {"type": "json_object"}},
         )
+
+        # Create a fallback-aware LLM
+        llm = primary_llm.with_fallbacks([fallback_llm])
 
         # First extract a deterministic voice/emotion signature from pasted posts.
         normalized_past_posts = _prepare_recent_posts(user_past_posts)
@@ -252,14 +269,24 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
 
         if normalized_past_posts["count"] > 0:
             try:
-                extractor_llm = ChatGroq(
+                primary_extractor_llm = ChatOpenAI(
+                    model=os.getenv("EXTRACTOR_MODEL", "deepseek-v4-flash"),
+                    temperature=0.2,
+                    openai_api_key=_get_deepseek_api_key(),
+                    base_url="https://api.deepseek.com",
+                    model_kwargs={"response_format": {"type": "json_object"}},
+                )
+
+                fallback_extractor_llm = ChatGroq(
                     model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                     temperature=0.2,
                     groq_api_key=_get_groq_api_key(),
                     model_kwargs={"response_format": {"type": "json_object"}},
                 )
+
                 extractor_prompt = ChatPromptTemplate.from_template(VOICE_EMOTION_EXTRACTION_PROMPT)
-                extractor_chain = extractor_prompt | extractor_llm
+                # Use with_fallbacks to automatically try Groq if DeepSeek fails
+                extractor_chain = (extractor_prompt | primary_extractor_llm).with_fallbacks([extractor_prompt | fallback_extractor_llm])
                 extractor_response = await guarded_llm_ainvoke(
                     extractor_chain,
                     {"user_past_posts": normalized_past_posts["formatted"]},

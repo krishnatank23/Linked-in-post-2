@@ -5,6 +5,7 @@ import re
 import requests
 import random
 from typing import Any
+from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
@@ -61,6 +62,11 @@ If a LinkedIn URL is not found in results, make a best guess slug from their nam
 JSON array:"""
 
 
+def _get_deepseek_api_key() -> str | None:
+    """Support the DeepSeek API key env var."""
+    return os.getenv("DEEPSEEK_API_KEY")
+
+
 def _get_groq_api_key() -> str | None:
     """Support the Groq API key env var."""
     return os.getenv("GROQ_API_KEY")
@@ -79,13 +85,22 @@ def sanitize_niche(raw: str) -> str:
 async def extract_niche_signature(profile_data: dict, brand_voice: dict) -> dict[str, Any]:
     """Step 1: Use LLM to extract a structured niche signature."""
     try:
-        llm = ChatGroq(
+        primary_llm = ChatOpenAI(
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+            temperature=0.2,
+            openai_api_key=_get_deepseek_api_key(),
+            base_url="https://api.deepseek.com",
+        )
+
+        fallback_llm = ChatGroq(
             model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.2,
             groq_api_key=_get_groq_api_key(),
         )
+
         prompt = ChatPromptTemplate.from_template(SEARCH_QUERY_PROMPT)
-        chain = prompt | llm
+        # Use with_fallbacks to automatically try Groq if DeepSeek fails
+        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
         response = await guarded_llm_ainvoke(
             chain,
             {
@@ -276,13 +291,22 @@ async def rank_influencers_with_llm(signature: dict, user_summary: str, raw_resu
         if direct_urls:
             results_text += f"\n\nDirect LinkedIn URLs found:\n" + "\n".join(direct_urls)
 
-        llm = ChatGroq(
+        primary_llm = ChatOpenAI(
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+            temperature=0.2,
+            openai_api_key=_get_deepseek_api_key(),
+            base_url="https://api.deepseek.com",
+        )
+
+        fallback_llm = ChatGroq(
             model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.2,
             groq_api_key=_get_groq_api_key(),
         )
+
         prompt = ChatPromptTemplate.from_template(RANK_INFLUENCERS_PROMPT)
-        chain = prompt | llm
+        # Use with_fallbacks to automatically try Groq if DeepSeek fails
+        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
         response = await guarded_llm_ainvoke(
             chain,
             {

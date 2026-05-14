@@ -34,14 +34,18 @@ router = APIRouter(prefix="/api", tags=["pipeline"])
 PIPELINE_TIMEOUT_SECONDS = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "1200"))
 
 
-def _ensure_groq_key() -> None:
+def _ensure_ai_keys() -> None:
     load_backend_env()
+    deepseek_key = str(os.getenv("DEEPSEEK_API_KEY") or "").strip()
     groq_key = str(os.getenv("GROQ_API_KEY") or "").strip()
-    if not groq_key:
+    
+    if not deepseek_key and not groq_key:
         raise HTTPException(
             status_code=400,
-            detail="GROQ_API_KEY is missing. Add it to backend/.env, restart the backend, and run the pipeline again.",
+            detail="AI API Keys are missing. Please add DEEPSEEK_API_KEY (Primary) or GROQ_API_KEY (Fallback) to backend/.env and restart the backend.",
         )
+    if not deepseek_key:
+        print("[WARNING] DEEPSEEK_API_KEY is missing. Falling back to GROQ_API_KEY for all operations.")
 
 
 def _normalize_selected_influencers(raw_influencer_data: dict | list[dict] | None) -> list[dict]:
@@ -355,7 +359,7 @@ def _build_overall_gap_summary(per_influencer_entries: list[dict]) -> dict:
 @router.post("/pipeline/run", response_model=PipelineResponse)
 async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depends(get_db)):
     """Run the full agentic AI pipeline for a given user."""
-    _ensure_groq_key()
+    _ensure_ai_keys()
 
     # Get user and resume path
     result = await db.execute(select(User).where(User.id == request.user_id))
@@ -474,7 +478,7 @@ async def run_agent_pipeline(request: PipelineRequest, db: AsyncSession = Depend
 @router.post("/pipeline/run-stage", response_model=PipelineResponse)
 async def run_pipeline_stage(request: PipelineStageRequest, db: AsyncSession = Depends(get_db)):
     """Run a single staged pipeline step and persist its output."""
-    _ensure_groq_key()
+    _ensure_ai_keys()
 
     user = await _get_user(db, request.user_id)
     stage = str(request.stage or "").strip().lower()

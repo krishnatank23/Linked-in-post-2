@@ -5,6 +5,7 @@ import ast
 import traceback
 import asyncio
 from typing import Any
+from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
@@ -12,6 +13,11 @@ from agents.llm_guard import guarded_llm_ainvoke
 from agents.json_utils import parse_llm_json_content
 
 load_backend_env()
+
+
+def _get_deepseek_api_key() -> str | None:
+    """Support the DeepSeek API key env var."""
+    return os.getenv("DEEPSEEK_API_KEY")
 
 
 def _get_groq_api_key() -> str | None:
@@ -39,12 +45,21 @@ Model output to repair:
 
 Return ONLY valid JSON matching the brand voice schema. No markdown, no explanation, no code fences."""
     )
-    repair_llm = ChatGroq(
-        model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+    primary_repair_llm = ChatOpenAI(
+        model=os.getenv("REPAIR_MODEL", "deepseek-v4-flash"),
+        temperature=0.0,
+        openai_api_key=_get_deepseek_api_key(),
+        base_url="https://api.deepseek.com",
+    )
+
+    fallback_repair_llm = ChatGroq(
+        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         temperature=0.0,
         groq_api_key=_get_groq_api_key(),
     )
-    repair_chain = repair_prompt | repair_llm
+
+    # Use with_fallbacks to automatically try Groq if DeepSeek fails
+    repair_chain = (repair_prompt | primary_repair_llm).with_fallbacks([repair_prompt | fallback_repair_llm])
     repair_response = await guarded_llm_ainvoke(
         repair_chain,
         {
@@ -179,15 +194,23 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         industry_context = await search_industry_context(parsed_profile)
         print(f"[DEBUG] Brand Voice Agent: Industry context retrieved ({len(industry_context)} chars)")
 
-        # Step 2: Use Groq LLM to generate brand voice and persona
-        llm = ChatGroq(
-            model=os.getenv("BRAND_VOICE_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        # Step 2: Use DeepSeek LLM (with Groq fallback) to generate brand voice and persona
+        primary_llm = ChatOpenAI(
+            model=os.getenv("BRAND_VOICE_MODEL", "deepseek-v4-flash"),
+            temperature=0.1,
+            openai_api_key=_get_deepseek_api_key(),
+            base_url="https://api.deepseek.com",
+        )
+
+        fallback_llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.1,
             groq_api_key=_get_groq_api_key(),
         )
 
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
-        chain = prompt | llm
+        # Use with_fallbacks to automatically try Groq if DeepSeek fails
+        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
 
         from agents.markdown_utils import format_profile_markdown_detailed
         
@@ -211,7 +234,7 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
                 "error": (
                     "The AI model returned an empty response for brand voice. "
                     "This can happen if the input (profile/industry context) is too large "
-                    "or if there's a temporary issue with the Groq service."
+                    "or if there's a temporary issue with the DeepSeek service."
                 ),
             }
 
@@ -242,14 +265,11 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         }
     except Exception as e:
         err = str(e)
-        if "rate limit" in err.lower() or "tokens per day" in err.lower() or "429" in err:
+        if "rate limit" in err.lower() or "429" in err:
             return {
                 "status": "error",
                 "output": None,
-                "error": (
-                    "Groq API token limit reached during Brand Voice Agent. "
-                    "Please wait for Groq retry window, or reduce token usage / upgrade plan."
-                ),
+                "error": "DeepSeek API limit reached. Please try again later.",
             }
         return {
             "status": "error",

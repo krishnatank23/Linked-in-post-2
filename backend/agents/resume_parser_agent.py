@@ -4,6 +4,7 @@ import traceback
 from typing import Any
 import fitz
 from docx import Document
+from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from env_config import load_backend_env
@@ -14,6 +15,11 @@ import asyncio
 import json
 from agents.llm_guard import guarded_llm_ainvoke
 load_backend_env()
+
+
+def _get_deepseek_api_key() -> str | None:
+    """Support the DeepSeek API key env var."""
+    return os.getenv("DEEPSEEK_API_KEY")
 
 
 def _get_groq_api_key() -> str | None:
@@ -194,7 +200,7 @@ def _sanitize_personal_info(parsed_data: dict[str, Any], resume_text: str) -> No
 
 async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
     """
-    Agent 1: Parse resume and extract structured data using Groq LLM.
+    Agent 1: Parse resume and extract structured data using DeepSeek LLM.
     Returns a dict with status, output, and optional error.
     """
     try:
@@ -210,15 +216,23 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
                 "error": "Could not extract sufficient text from the resume. Please upload a valid PDF or DOCX file.",
             }
 
-        # Step 2: Use Groq LLM to parse and structure the resume
-        llm = ChatGroq(
-            model=os.getenv("RESUME_PARSER_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        # Step 2: Use DeepSeek LLM (with Groq fallback) to parse and structure the resume
+        primary_llm = ChatOpenAI(
+            model=os.getenv("RESUME_PARSER_MODEL", "deepseek-v4-flash"),
+            temperature=0.1,
+            openai_api_key=_get_deepseek_api_key(),
+            base_url="https://api.deepseek.com",
+        )
+
+        fallback_llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.1,
             groq_api_key=_get_groq_api_key(),
         )
 
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
-        chain = prompt | llm
+        # Use with_fallbacks to automatically try Groq if DeepSeek fails
+        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
 
         try:
             print(f"[DEBUG] Resume Parser: Invoking LLM to parse resume (timeout: 45s)...")
@@ -268,15 +282,11 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
         }
     except Exception as e:
         err = str(e)
-        if "rate limit" in err.lower() or "tokens per day" in err.lower() or "429" in err:
+        if "rate limit" in err.lower() or "429" in err:
             return {
                 "status": "error",
                 "output": None,
-                "error": (
-                    "Groq API token limit reached during Resume Parser. "
-                    "Please wait for the retry window shown by Groq (for example, 'try again in 7m9s'), "
-                    "or upgrade Groq tier / use a lower-token model."
-                ),
+                "error": "DeepSeek API limit reached. Please try again later.",
             }
         return {
             "status": "error",

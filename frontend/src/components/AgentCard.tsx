@@ -80,6 +80,69 @@ function renderList(items: any[], fallback: string) {
   );
 }
 
+function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const shortDayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  
+  const days = Array.from({ length: firstDay }, () => null).concat(
+    Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  );
+  
+  return (
+    <div className="p-5 rounded-2xl bg-black/5 border border-black/10">
+      <div className="flex items-center justify-between mb-4">
+        <div className="font-semibold text-[#1c1a17] text-lg">{monthNames[month]} {year}</div>
+        <div className="text-[10px] uppercase tracking-[0.15em] text-accent font-bold px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-full flex items-center gap-1.5">
+          <Clock3 size={12} />
+          Content Schedule
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-7 gap-2 mb-2">
+        {shortDayNames.map((day) => (
+          <div key={day} className="text-center text-[11px] font-bold tracking-wider text-[#1c1a17]/40 py-1 uppercase">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-7 gap-2">
+        {days.map((date, idx) => {
+          if (date === null) return <div key={`empty-${idx}`} className="p-2"></div>;
+          
+          const currentDate = new Date(year, month, date as number);
+          const dayName = dayNames[currentDate.getDay()];
+          const isScheduled = scheduledDays.includes(dayName);
+          const isToday = date === today.getDate();
+          
+          return (
+            <div 
+              key={date} 
+              className={`
+                flex items-center justify-center h-10 w-full rounded-xl text-sm transition-all duration-300
+                ${isScheduled ? 'bg-accent text-white font-bold shadow-lg shadow-accent/25 scale-105 ring-2 ring-accent/20 ring-offset-1 ring-offset-transparent' : 'text-[#1c1a17]/70 hover:bg-black/10 hover:text-[#1c1a17]'}
+                ${isToday && !isScheduled ? 'border-2 border-accent/40 text-accent font-bold' : ''}
+              `}
+              title={isScheduled ? `Scheduled Post Day (${dayName})` : dayName}
+            >
+              {date}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
   const isSuccess = data.status === 'success';
   const agentName = String(data.agent_name || 'Agent');
@@ -407,6 +470,11 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
             <StatCard label="Posting Frequency" value={output.posting_frequency || 'N/A'} icon={BarChart3} />
             <StatCard label="Scheduled Days" value={scheduledDays.join(', ') || 'N/A'} icon={Clock3} />
           </div>
+
+          {/* Calendar Schedule */}
+          {scheduledDays.length > 0 && (
+            <ScheduleCalendar scheduledDays={scheduledDays} />
+          )}
           
           {/* Main Prompt Section */}
           {prompt && (

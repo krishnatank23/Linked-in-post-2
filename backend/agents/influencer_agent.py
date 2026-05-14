@@ -85,22 +85,39 @@ def sanitize_niche(raw: str) -> str:
 async def extract_niche_signature(profile_data: dict, brand_voice: dict) -> dict[str, Any]:
     """Step 1: Use LLM to extract a structured niche signature."""
     try:
-        primary_llm = ChatOpenAI(
-            model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-            temperature=0.2,
-            openai_api_key=_get_deepseek_api_key(),
-            base_url="https://api.deepseek.com",
-        )
-
-        fallback_llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            temperature=0.2,
-            groq_api_key=_get_groq_api_key(),
-        )
-
+        # Step 1: Build the LLM chain with optional fallback
+        ds_key = _get_deepseek_api_key()
+        groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(SEARCH_QUERY_PROMPT)
-        # Use with_fallbacks to automatically try Groq if DeepSeek fails
-        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
+        
+        chains = []
+        if ds_key:
+            primary_llm = ChatOpenAI(
+                model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+                temperature=0.2,
+                api_key=ds_key,
+                base_url="https://api.deepseek.com",
+            )
+            chains.append(prompt | primary_llm)
+        
+        if groq_key:
+            fallback_llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.2,
+                groq_api_key=groq_key,
+            )
+            chains.append(prompt | fallback_llm)
+
+        if not chains:
+            # Fallback to defaults without LLM if possible, or raise
+            return {
+                "primary_niche": profile_data.get("industry", "professional"),
+                "seniority_level": "Senior",
+                "keywords": [profile_data.get("current_role", "")],
+                "target_idol_type": "Industry Leader"
+            }
+
+        chain = chains[0].with_fallbacks(chains[1:]) if len(chains) > 1 else chains[0]
         response = await guarded_llm_ainvoke(
             chain,
             {
@@ -291,22 +308,33 @@ async def rank_influencers_with_llm(signature: dict, user_summary: str, raw_resu
         if direct_urls:
             results_text += f"\n\nDirect LinkedIn URLs found:\n" + "\n".join(direct_urls)
 
-        primary_llm = ChatOpenAI(
-            model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-            temperature=0.2,
-            openai_api_key=_get_deepseek_api_key(),
-            base_url="https://api.deepseek.com",
-        )
-
-        fallback_llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            temperature=0.2,
-            groq_api_key=_get_groq_api_key(),
-        )
-
+        ds_key = _get_deepseek_api_key()
+        groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(RANK_INFLUENCERS_PROMPT)
-        # Use with_fallbacks to automatically try Groq if DeepSeek fails
-        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
+        
+        chains = []
+        if ds_key:
+            primary_llm = ChatOpenAI(
+                model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+                temperature=0.2,
+                api_key=ds_key,
+                base_url="https://api.deepseek.com",
+            )
+            chains.append(prompt | primary_llm)
+        
+        if groq_key:
+            fallback_llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.2,
+                groq_api_key=groq_key,
+            )
+            chains.append(prompt | fallback_llm)
+
+        if not chains:
+            print("[LLM Ranker] No API keys available for ranking")
+            return []
+
+        chain = chains[0].with_fallbacks(chains[1:]) if len(chains) > 1 else chains[0]
         response = await guarded_llm_ainvoke(
             chain,
             {

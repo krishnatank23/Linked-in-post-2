@@ -45,21 +45,31 @@ Model output to repair:
 
 Return ONLY valid JSON matching the brand voice schema. No markdown, no explanation, no code fences."""
     )
-    primary_repair_llm = ChatOpenAI(
-        model=os.getenv("REPAIR_MODEL", "deepseek-v4-flash"),
-        temperature=0.0,
-        openai_api_key=_get_deepseek_api_key(),
-        base_url="https://api.deepseek.com",
-    )
+    ds_key = _get_deepseek_api_key()
+    groq_key = _get_groq_api_key()
+    
+    repair_models = []
+    if ds_key:
+        primary_repair_llm = ChatOpenAI(
+            model=os.getenv("REPAIR_MODEL", "deepseek-v4-flash"),
+            temperature=0.0,
+            api_key=ds_key,
+            base_url="https://api.deepseek.com",
+        )
+        repair_models.append(repair_prompt | primary_repair_llm)
 
-    fallback_repair_llm = ChatGroq(
-        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        temperature=0.0,
-        groq_api_key=_get_groq_api_key(),
-    )
+    if groq_key:
+        fallback_repair_llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.0,
+            groq_api_key=groq_key,
+        )
+        repair_models.append(repair_prompt | fallback_repair_llm)
 
-    # Use with_fallbacks to automatically try Groq if DeepSeek fails
-    repair_chain = (repair_prompt | primary_repair_llm).with_fallbacks([repair_prompt | fallback_repair_llm])
+    if not repair_models:
+        raise RuntimeError("No AI API keys available for repair model.")
+
+    repair_chain = repair_models[0].with_fallbacks(repair_models[1:]) if len(repair_models) > 1 else repair_models[0]
     repair_response = await guarded_llm_ainvoke(
         repair_chain,
         {
@@ -194,23 +204,37 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         industry_context = await search_industry_context(parsed_profile)
         print(f"[DEBUG] Brand Voice Agent: Industry context retrieved ({len(industry_context)} chars)")
 
-        # Step 2: Use DeepSeek LLM (with Groq fallback) to generate brand voice and persona
-        primary_llm = ChatOpenAI(
-            model=os.getenv("BRAND_VOICE_MODEL", "deepseek-v4-flash"),
-            temperature=0.1,
-            openai_api_key=_get_deepseek_api_key(),
-            base_url="https://api.deepseek.com",
-        )
-
-        fallback_llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            temperature=0.1,
-            groq_api_key=_get_groq_api_key(),
-        )
-
+        # Step 2: Build the LLM chain with optional fallback
+        ds_key = _get_deepseek_api_key()
+        groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
-        # Use with_fallbacks to automatically try Groq if DeepSeek fails
-        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
+        
+        chains = []
+        if ds_key:
+            primary_llm = ChatOpenAI(
+                model=os.getenv("BRAND_VOICE_MODEL", "deepseek-v4-flash"),
+                temperature=0.1,
+                api_key=ds_key,
+                base_url="https://api.deepseek.com",
+            )
+            chains.append(prompt | primary_llm)
+        
+        if groq_key:
+            fallback_llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.1,
+                groq_api_key=groq_key,
+            )
+            chains.append(prompt | fallback_llm)
+
+        if not chains:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "No AI API keys (DeepSeek or Groq) found for brand voice agent.",
+            }
+
+        chain = chains[0].with_fallbacks(chains[1:]) if len(chains) > 1 else chains[0]
 
         from agents.markdown_utils import format_profile_markdown_detailed
         

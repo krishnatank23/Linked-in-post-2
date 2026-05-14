@@ -216,23 +216,37 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
                 "error": "Could not extract sufficient text from the resume. Please upload a valid PDF or DOCX file.",
             }
 
-        # Step 2: Use DeepSeek LLM (with Groq fallback) to parse and structure the resume
-        primary_llm = ChatOpenAI(
-            model=os.getenv("RESUME_PARSER_MODEL", "deepseek-v4-flash"),
-            temperature=0.1,
-            openai_api_key=_get_deepseek_api_key(),
-            base_url="https://api.deepseek.com",
-        )
-
-        fallback_llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            temperature=0.1,
-            groq_api_key=_get_groq_api_key(),
-        )
-
+        # Step 2: Build the LLM chain with optional fallback
+        ds_key = _get_deepseek_api_key()
+        groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
-        # Use with_fallbacks to automatically try Groq if DeepSeek fails
-        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
+        
+        chains = []
+        if ds_key:
+            primary_llm = ChatOpenAI(
+                model=os.getenv("RESUME_PARSER_MODEL", "deepseek-v4-flash"),
+                temperature=0.1,
+                api_key=ds_key,
+                base_url="https://api.deepseek.com",
+            )
+            chains.append(prompt | primary_llm)
+        
+        if groq_key:
+            fallback_llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.1,
+                groq_api_key=groq_key,
+            )
+            chains.append(prompt | fallback_llm)
+
+        if not chains:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "No AI API keys (DeepSeek or Groq) found in environment.",
+            }
+
+        chain = chains[0].with_fallbacks(chains[1:]) if len(chains) > 1 else chains[0]
 
         try:
             print(f"[DEBUG] Resume Parser: Invoking LLM to parse resume (timeout: 45s)...")

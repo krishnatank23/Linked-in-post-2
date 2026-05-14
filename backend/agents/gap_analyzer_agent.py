@@ -78,24 +78,39 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
     Agent 4: Perform gap analysis between user and influencer, then generate content strategy.
     """
     try:
-        primary_llm = ChatOpenAI(
-            model=os.getenv("GAP_ANALYZER_MODEL", "deepseek-v4-flash"),
-            temperature=0.7,
-            openai_api_key=_get_deepseek_api_key(),
-            base_url="https://api.deepseek.com",
-            model_kwargs={"response_format": {"type": "json_object"}},
-        )
-
-        fallback_llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL_LITE", "llama-3.1-8b-instant"),
-            temperature=0.7,
-            groq_api_key=_get_groq_api_key(),
-            model_kwargs={"response_format": {"type": "json_object"}},
-        )
-
+        # Step 2: Build the LLM chain with optional fallback
+        ds_key = _get_deepseek_api_key()
+        groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(GAP_ANALYSIS_PROMPT)
-        # Use with_fallbacks to automatically try Groq if DeepSeek fails
-        chain = (prompt | primary_llm).with_fallbacks([prompt | fallback_llm])
+        
+        chains = []
+        if ds_key:
+            primary_llm = ChatOpenAI(
+                model=os.getenv("GAP_ANALYZER_MODEL", "deepseek-v4-flash"),
+                temperature=0.7,
+                api_key=ds_key,
+                base_url="https://api.deepseek.com",
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+            chains.append(prompt | primary_llm)
+        
+        if groq_key:
+            fallback_llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL_LITE", "llama-3.1-8b-instant"),
+                temperature=0.7,
+                groq_api_key=groq_key,
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+            chains.append(prompt | fallback_llm)
+
+        if not chains:
+            return {
+                "status": "error",
+                "output": None,
+                "error": "No AI API keys (DeepSeek or Groq) found for gap analyzer.",
+            }
+
+        chain = chains[0].with_fallbacks(chains[1:]) if len(chains) > 1 else chains[0]
         
         print(f"[GapAnalyzer] Running LITE analysis for influencer: {influencer_data.get('title') or influencer_data.get('name')}")
         response = await guarded_llm_ainvoke(

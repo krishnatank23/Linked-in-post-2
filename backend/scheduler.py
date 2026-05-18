@@ -57,6 +57,28 @@ async def morning_post_generation_check():
                     if user.last_automated_post_at and user.last_automated_post_at.date() == now.date():
                         print(f"[MORNING CHECK] SKIP User {user.email} already processed today.")
                         continue
+
+                    # 2.6. If user manually delivered the prompt/email for today, skip automated send.
+                    try:
+                        delivery_check = await db.execute(
+                            select(AgentOutput)
+                            .where(
+                                AgentOutput.user_id == user.id,
+                                AgentOutput.agent_name.in_(
+                                    ["LinkedIn Prompt Delivery Agent", "Email Delivery Agent", "LinkedIn Prompt Delivery Agent"]
+                                ),
+                                AgentOutput.status == "success",
+                            )
+                            .order_by(AgentOutput.created_at.desc())
+                            .limit(1)
+                        )
+                        latest_delivery = delivery_check.scalar_one_or_none()
+                        if latest_delivery and latest_delivery.created_at and latest_delivery.created_at.date() == now.date():
+                            print(f"[MORNING CHECK] SKIP User {user.email} - manual delivery already performed today.")
+                            continue
+                    except Exception:
+                        # Non-fatal: if delivery lookup fails, proceed with generation (safer default).
+                        pass
                     
                     # 3. Check if user has cached data
                     if not user.parsed_profile_cache or not user.brand_voice_cache:

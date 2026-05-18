@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Mail, RefreshCw, Send, Sparkles } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Sparkles } from 'lucide-react';
 import api from '../services/api';
 import AgentCard from '../components/AgentCard';
 import { useAuth } from '../context/AuthContext';
@@ -193,7 +192,7 @@ export default function WorkflowReviewPage() {
                   <h3 className="font-heading text-3xl font-semibold">{STEP_CONFIG[activeStep].title}</h3>
                   <p className="text-[#1c1a17]/55 mt-2 leading-7">Review this output carefully, then move to the next page for the next stage.</p>
                 </div>
-                <AgentCard data={currentResult} index={activeStep} />
+                <AgentCard data={currentResult} index={activeStep} projectId={user?.id} />
 
                 {activeStep === 2 ? (
                   <>
@@ -251,7 +250,7 @@ export default function WorkflowReviewPage() {
                       </p>
                       <div className="grid xl:grid-cols-2 gap-4">
                         {allAgentOutputs.map((result: any, idx: number) => (
-                          <AgentCard key={`${result.agent_name}-${idx}`} data={result} index={idx} />
+                          <AgentCard key={`${result.agent_name}-${idx}`} data={result} index={idx} projectId={user?.id} />
                         ))}
                       </div>
                     </div>

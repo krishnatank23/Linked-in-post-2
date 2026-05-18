@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Cpu, FileText,
-  LogOut, Mail, Play, Sparkles, Users, Target,
-  PenTool, Loader2, Bot, Zap, ExternalLink, Upload,
+  LogOut, Play, Sparkles, Users, Target,
+  Loader2, Bot, Zap, ExternalLink, Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -954,6 +954,7 @@ export default function StudioPage() {
                             index={activeStepIdx}
                             onRunAgain={runAgainForCurrentStep}
                             isRunning={loadingPipeline || runningGap}
+                            projectId={user?.id}
                           />
                         </div>
                       </div>

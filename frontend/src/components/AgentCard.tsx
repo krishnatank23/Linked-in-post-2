@@ -11,6 +11,7 @@ interface AgentCardProps {
   index: number;
   onRunAgain?: () => void;
   isRunning?: boolean;
+  projectId?: number | null;
 }
 
 function asArray(value: any): any[] {
@@ -166,8 +167,9 @@ export function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] })
 }
 
 
-const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
+const AgentCard = ({ data, index, onRunAgain, isRunning, projectId: _projectId }: AgentCardProps) => {
   const { user } = useAuth();
+  const resolvedProjectId = _projectId ?? user?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editedFields, setEditedFields] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
@@ -810,6 +812,7 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08 }}
+      data-project-id={resolvedProjectId}
       className={`${glassCard} flex flex-col h-full`}
     >
       <div className="p-6 md:p-7">

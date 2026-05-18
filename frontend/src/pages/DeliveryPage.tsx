@@ -9,7 +9,8 @@ import {
   Send,
   Clock3,
   X,
-  Copy
+  Copy,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -67,6 +68,15 @@ export default function DeliveryPage() {
 
   const latestPostResult = useMemo(() => {
     return postResults[postResults.length - 1] || null;
+  }, [postResults]);
+
+  const generatedPromptByDay = useMemo(() => {
+    const map = new Map<string, any>();
+    postResults.forEach((r: any) => {
+      const day = String(r.output?.target_day || 'master');
+      map.set(day, r.output);
+    });
+    return map;
   }, [postResults]);
 
   const deliveryResult = useMemo(() => {
@@ -317,14 +327,26 @@ export default function DeliveryPage() {
                       <span className="font-bold text-xl">{day}</span>
                       <div className="px-3 py-1 bg-[#c9714f]/10 text-[#c9714f] text-[10px] font-bold uppercase rounded-lg">Suggested</div>
                     </div>
-                    <button
-                      onClick={() => generatePosts(day)}
-                      disabled={generatingDays[day]}
-                      className="w-full py-3 bg-white border border-black/10 text-black font-bold rounded-xl text-sm shadow-sm group-hover:border-[#c9714f]/30 group-hover:text-[#c9714f] transition-all flex items-center justify-center gap-2"
-                    >
-                      {generatingDays[day] ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      Generate for {day}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => generatePosts(day)}
+                        disabled={generatingDays[day]}
+                        className="flex-1 py-3 bg-white border border-black/10 text-black font-bold rounded-xl text-sm shadow-sm group-hover:border-[#c9714f]/30 group-hover:text-[#c9714f] transition-all flex items-center justify-center gap-2"
+                      >
+                        {generatingDays[day] ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                        Generate for {day}
+                      </button>
+
+                      {generatedPromptByDay.has(day) ? (
+                        <button
+                          onClick={() => setSelectedPrompt(generatedPromptByDay.get(day))}
+                          className="w-12 h-12 rounded-xl border border-black/10 bg-white flex items-center justify-center text-black/70 hover:bg-black/5 transition-colors"
+                          title={`Show generated prompt for ${day}`}
+                        >
+                          <Eye size={18} />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

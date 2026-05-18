@@ -159,7 +159,7 @@ export default function ResultsPage() {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {results.map((result, index) => (
-                <AgentCard key={`${result.agent_name}-${index}`} data={result} index={index} />
+                <AgentCard key={`${result.agent_name}-${index}`} data={result} index={index} projectId={user?.id} />
               ))}
             </div>
           </div>

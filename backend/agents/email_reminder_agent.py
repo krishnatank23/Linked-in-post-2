@@ -255,6 +255,76 @@ def _build_prompt_email_html(prompt_output: dict[str, Any], reminder_msg: str) -
         dos_list = dos_and_donts.get("do", []) or dos_and_donts.get("dos", []) or []
         donts_list = dos_and_donts.get("don't", []) or dos_and_donts.get("donts", []) or []
 
+    # Check if it's a batch of prompts
+    if isinstance(prompt_output, dict) and prompt_output.get("generation_type") == "batch_prompts":
+        prompts = prompt_output.get("prompts", [])
+        sections_html = ""
+        for idx, p in enumerate(prompts, 1):
+            day_label = p.get('target_day', f'Prompt {idx}')
+            p_domain = p.get("user_domain", "")
+            p_prompt = p.get("post_generation_prompt", "No prompt content")
+            p_topics = p.get("suggested_post_topics", [])
+            p_trends = p.get("current_domain_trends", [])
+            p_triggers = p.get("engagement_triggers", [])
+            p_dos = p.get("dos_and_donts", {})
+            p_do_list = p_dos.get("do_list", []) or p_dos.get("do", []) or p_dos.get("dos", []) or []
+            p_dont_list = p_dos.get("dont_list", []) or p_dos.get("don't", []) or p_dos.get("donts", []) or []
+
+            dos_html = "".join(f"<li style='margin: 6px 0; color: #166534;'>✓ {item}</li>" for item in p_do_list if item)
+            donts_html = "".join(f"<li style='margin: 6px 0; color: #991b1b;'>✗ {item}</li>" for item in p_dont_list if item)
+
+            sections_html += f"""
+            <div style="margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 30px;">
+                <h2 style="color: #c9714f; font-size: 22px; margin-bottom: 6px;">📅 {day_label}</h2>
+                {"<div style='color: #666; font-size: 13px; margin-bottom: 14px;'>Domain: " + p_domain + "</div>" if p_domain else ""}
+                
+                <div style="margin-top: 16px;">
+                    <div style="color: #0077b5; font-size: 16px; font-weight: bold; margin-bottom: 8px;">Post Generation Prompt</div>
+                    <div class="prompt-box">{p_prompt}</div>
+                </div>
+
+                {"<div style='margin-top: 16px;'><div style=" + '"color: #0077b5; font-size: 16px; font-weight: bold; margin-bottom: 8px;"' + ">Suggested Topics</div><div class=" + '"list-box"' + "><ul>" + list_items(p_topics) + "</ul></div></div>" if p_topics else ""}
+
+                {"<div style='margin-top: 16px;'><div style=" + '"color: #0077b5; font-size: 16px; font-weight: bold; margin-bottom: 8px;"' + ">Current Domain Trends</div><div class=" + '"list-box"' + "><ul>" + list_items(p_trends) + "</ul></div></div>" if p_trends else ""}
+
+                {"<div style='margin-top: 16px;'><div style=" + '"color: #0077b5; font-size: 16px; font-weight: bold; margin-bottom: 8px;"' + ">Engagement Triggers</div><div class=" + '"list-box"' + "><ul>" + list_items(p_triggers) + "</ul></div></div>" if p_triggers else ""}
+
+                {('<div style="margin-top: 16px;"><div style="color: #0077b5; font-size: 16px; font-weight: bold; margin-bottom: 8px;">Do' + "'" + 's and Don' + "'" + 'ts</div><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;"><div style="padding: 12px; border-radius: 6px; background: #f0fdf4; border: 1px solid #86efac;"><strong style="color: #166534;">✓ DO:</strong><ul style="padding-left: 16px;">' + dos_html + '</ul></div><div style="padding: 12px; border-radius: 6px; background: #fef2f2; border: 1px solid #fca5a5;"><strong style="color: #991b1b;">✗ DON' + "'" + 'T:</strong><ul style="padding-left: 16px;">' + donts_html + '</ul></div></div></div>') if (p_do_list or p_dont_list) else ""}
+            </div>
+            """
+        
+        return f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }}
+                .container {{ max-width: 720px; margin: 0 auto; background: white; padding: 28px; border-radius: 8px; border: 1px solid #ddd; }}
+                .header {{ padding-bottom: 18px; border-bottom: 3px solid #0077b5; }}
+                .header h1 {{ color: #0077b5; margin: 0; font-size: 26px; }}
+                .prompt-box {{ background: #f8f9fa; padding: 16px; border-left: 4px solid #c9714f; border-radius: 6px; line-height: 1.6; color: #333; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }}
+                .list-box {{ background: #fafafa; padding: 5px 16px; border-radius: 6px; font-size: 13px; }}
+                .footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 12px; color: #777; }}
+                .reminder {{ background: #fff3cd; padding: 12px; border-radius: 6px; margin-top: 16px; color: #856404; font-size: 13px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Your Weekly LinkedIn Content Batch</h1>
+                    <p style="color: #666; margin: 8px 0 0 0; font-size: 14px;">{reminder_msg}</p>
+                </div>
+                <div style="margin-top: 24px;">
+                    {sections_html}
+                </div>
+                <div class="reminder">
+                    Copy each prompt into ChatGPT, Claude, or your preferred AI to generate posts that match your voice and strategy.
+                </div>
+                <div class="footer">PromptPilot AI • Your LinkedIn Content Strategy Partner</div>
+            </div>
+        </body>
+        </html>
+        """
+
     return f"""
     <html>
     <head>
@@ -333,20 +403,27 @@ async def run_email_reminder(user_email: str, post_generation_output: dict[str, 
             }
 
         generation_type = post_generation_output.get("generation_type", "posts")
-        is_meta_prompt = generation_type == "meta_prompt"
+        is_meta_prompt = generation_type == "meta_prompt" or generation_type == "batch_prompts"
         reminder_msg = _get_funny_reminder()
 
         if is_meta_prompt:
             prompt_output = post_generation_output
-            if not prompt_output.get("post_generation_prompt"):
+            if generation_type == "meta_prompt" and not prompt_output.get("post_generation_prompt"):
                 return {
                     "status": "error",
                     "output": None,
                     "error": "No generated prompt found",
                 }
+            if generation_type == "batch_prompts" and not prompt_output.get("prompts"):
+                return {
+                    "status": "error",
+                    "output": None,
+                    "error": "No prompts found in batch",
+                }
 
             html_body = _build_prompt_email_html(prompt_output, reminder_msg)
-            email_subject = "Your LinkedIn Post Generation Prompt [BrandForge AI]"
+            subject_prefix = "Your Weekly Content Batch" if generation_type == "batch_prompts" else "Your LinkedIn Prompt"
+            email_subject = f"{subject_prefix} [PromptPilot AI]"
             result_output: dict[str, Any] = {
                 "prompt_sent": True,
                 "email_sent": True,

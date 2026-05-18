@@ -82,6 +82,7 @@ class GeneratePostsRequest(BaseModel):
     user_id: int
     gap_analysis_data: dict
     user_past_posts: Optional[str] = None
+    target_day: Optional[str] = None
 
 
 class SendReminderRequest(BaseModel):

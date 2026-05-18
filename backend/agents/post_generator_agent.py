@@ -57,7 +57,7 @@ PREVIOUSLY GENERATED PROMPTS (AVOID REPEATING):
 ═══════════════════════════════════════════════════════════════════
 
 YOUR TASK:
-
+{target_day_instruction}
 Analyze all the above context and generate a detailed, structured output that culminates in a "Master Generation Prompt".
 
 1. **Hyper-Specific Domain Authority**
@@ -70,10 +70,10 @@ Analyze all the above context and generate a detailed, structured output that cu
    - Capture their exact sentence cadence, vocabulary, and emotional "vibe"
    - Ensure the voice sounds human, not like an AI generated profile
 
-3. **Single Actionable Prompt**
-   - Create a concise, ready-to-copy prompt that combines a specific topic, trend, and trigger.
-   - This should be a direct command to an LLM to write a single post, NOT a massive 800-word identity guide.
-
+3. **Master Generation Prompt**
+   - Create a highly detailed, comprehensive "Master Bible" prompt.
+   - It should act as a complete identity and strategy guide for the LLM to write the perfect post.
+   - Include exact persona, target audience, brand voice rules, do's and don'ts, formatting rules, and the specific strategic topic/trend to cover.
 OUTPUT FORMAT (JSON ONLY):
 
 {{
@@ -85,7 +85,7 @@ OUTPUT FORMAT (JSON ONLY):
         "Trendy industry topic 1",
         "Trendy industry topic 2"
     ],
-    "posting_frequency": "Recommended frequency (e.g., '4 high-impact posts per week')",
+    "posting_frequency": "Recommended frequency as a plain number string (e.g., '3' or '4')",
     "posting_schedule_days": ["Monday", "Tuesday", "Thursday", "Friday"],
     "posting_time_utc": "Optimal posting time (e.g., '13:00')",
     "content_strategy_pillars": [
@@ -97,10 +97,9 @@ OUTPUT FORMAT (JSON ONLY):
         {{
             "pillar": "...",
             "focus": "...",
-            "why_important": "..."
         }}
     ],
-    "post_generation_prompt": "A single, highly concise, ready-to-copy prompt that the user can immediately paste into an AI to generate ONE post. It MUST combine ONE of the suggested topics, ONE of the domain trends, and ONE of the engagement triggers. Do NOT generate a massive 800-word essay. Format it exactly like this: 'Act as a top-tier LinkedIn thought leader in [User Domain]. Write an engaging, professional post about [Topic 1], discussing the impact of [Trend 1]. Use the following hook: [Trigger 1]. Maintain my authentic voice...' Keep it practical and direct.",
+    "post_generation_prompt": "A massive, 500+ word 'Master Bible' prompt that the user can paste into an AI. It MUST be structured with clear markdown headings (e.g., ### Context, ### Target Audience, ### Brand Voice & Tone, ### Do's and Don'ts, ### Formatting Rules, ### Today's Topic). **CRITICAL: You MUST use double line breaks (\\n\\n) before and after every heading so the text is properly spaced and readable.** It must comprehensively detail their exact persona, the specific strategic topic/trend to cover today, and exact engagement hooks to use. Make it extremely long, robust, and professional.",
     "dos_and_donts": {{
         "do_list": [
             "Specific trendy action for their domain",
@@ -181,7 +180,7 @@ def _prepare_recent_posts(user_past_posts: str | None) -> dict[str, Any]:
     }
 
 
-async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict, user_past_posts: str | None = None) -> dict[str, Any]:
+async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysis: dict, user_past_posts: str | None = None, target_day: str | None = None) -> dict[str, Any]:
     """
     Agent 5: Generate a comprehensive prompt for LinkedIn post generation based on all previous agents.
     """
@@ -239,8 +238,6 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         #         base_url="https://api.deepseek.com",
         #         model_kwargs={"response_format": {"type": "json_object"}},
         #     )
-        #     models.append(primary_llm)
-
         if groq_key:
             fallback_llm = ChatGroq(
                 model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -322,6 +319,10 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         llm_prompt = ChatPromptTemplate.from_template(PROMPT_GENERATION_PROMPT)
         chain = llm_prompt | llm
         
+        target_day_instruction = ""
+        if target_day:
+            target_day_instruction = f"FOCUS: You are generating a prompt SPECIFICALLY for a post to be published on {target_day}. Ensure the topic and angle align with the content pillar and strategy for {target_day}."
+
         response = await guarded_llm_ainvoke(
             chain,
             {
@@ -331,6 +332,7 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                 "user_past_posts": normalized_past_posts["formatted"],
                 "voice_emotion_signature": json.dumps(voice_emotion_signature, indent=2),
                 "previous_posts": previous_prompts_text,
+                "target_day_instruction": target_day_instruction,
             },
             timeout_seconds=90,
         )
@@ -359,9 +361,38 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                 raise json.JSONDecodeError(f"Prompt generator output was not a valid JSON object. Raw output: {content[:200]}...", content, 0)
         
         # Enrich the output with metadata
+        
+        # Post-process the generated prompt to ensure proper spacing for markdown headings
+        if "post_generation_prompt" in prompt_results and isinstance(prompt_results["post_generation_prompt"], str):
+            prompt_results["post_generation_prompt"] = re.sub(
+                r'(?<!\n)\s*(###\s+[A-Za-z]+)', 
+                r'\n\n\1', 
+                prompt_results["post_generation_prompt"]
+            ).strip()
+
         prompt_results["voice_emotion_signature"] = voice_emotion_signature
         prompt_results["user_past_posts_used_count"] = normalized_past_posts["count"]
         prompt_results["generation_type"] = "meta_prompt"
+        prompt_results["target_day"] = target_day
+        
+        # Force posting_schedule_days to match gap analysis recommended_days (single source of truth)
+        gap_strategy = gap_analysis.get("overall_content_strategy") or gap_analysis.get("content_strategy") or {}
+        canonical_days = gap_strategy.get("recommended_days")
+        if canonical_days and isinstance(canonical_days, list) and len(canonical_days) > 0:
+            prompt_results["posting_schedule_days"] = canonical_days
+            
+            # Force posting_frequency description count to match canonical_days count
+            num_days = len(canonical_days)
+            original_freq = str(prompt_results.get("posting_frequency") or "")
+            if original_freq:
+                import re as _re
+                # Try replacing starting number or any standalone number with num_days
+                updated_freq = _re.sub(r'^\d+', str(num_days), original_freq)
+                if updated_freq == original_freq:
+                    updated_freq = _re.sub(r'\b\d+\b', str(num_days), original_freq)
+                prompt_results["posting_frequency"] = updated_freq
+            else:
+                prompt_results["posting_frequency"] = f"{num_days} high-impact posts per week, focusing on educational, thought leadership, and interactive content"
         
         print(f"[PROMPT GENERATOR] Success. Domain: {prompt_results.get('user_domain')}")
         

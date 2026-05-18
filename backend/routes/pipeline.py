@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import UploadFile, File, Form
+from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
@@ -536,7 +537,31 @@ async def run_pipeline_stage(request: PipelineStageRequest, db: AsyncSession = D
     if stage == "brand_voice":
         parsed_profile = user.parsed_profile_cache
         if not parsed_profile:
-            raise HTTPException(status_code=400, detail="Run the resume parser first to create your profile cache")
+            if not user.resume_path:
+                raise HTTPException(status_code=400, detail="No resume uploaded for this user. Please upload your resume first.")
+            try:
+                resolved_resume_paths = _resolve_resume_paths(user.resume_path)
+            except FileNotFoundError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Uploaded profile document not found. Please re-upload your document: {str(e)}"
+                )
+            document_input = resolved_resume_paths if len(resolved_resume_paths) > 1 else resolved_resume_paths[0]
+            parser_res = await asyncio.wait_for(run_resume_parser(document_input), timeout=PIPELINE_TIMEOUT_SECONDS)
+            if parser_res.get("status") != "success" or not parser_res.get("output"):
+                raise HTTPException(status_code=400, detail=f"Resume parser failed upstream: {parser_res.get('error')}")
+            parsed_profile = parser_res["output"].get("parsed_profile")
+            user.parsed_profile_cache = parsed_profile
+            await _replace_agent_output(
+                db=db,
+                user_id=user.id,
+                agent_name="Resume Parser Agent",
+                agent_description="Extracts personal info, experience, skills, education, and all details from your resume using AI",
+                status="success",
+                output=parser_res.get("output"),
+                error_message=None,
+            )
+            await db.commit()
 
         result = await asyncio.wait_for(run_brand_voice_agent(parsed_profile), timeout=PIPELINE_TIMEOUT_SECONDS)
         agent_output = await _replace_agent_output(
@@ -574,8 +599,52 @@ async def run_pipeline_stage(request: PipelineStageRequest, db: AsyncSession = D
     if stage == "influencer":
         parsed_profile = user.parsed_profile_cache
         brand_voice = user.brand_voice_cache
-        if not parsed_profile or not brand_voice:
-            raise HTTPException(status_code=400, detail="Run resume parser and brand voice first")
+
+        # 1. Resolve Resume Parser if missing
+        if not parsed_profile:
+            if not user.resume_path:
+                raise HTTPException(status_code=400, detail="No resume uploaded for this user. Please upload your resume first.")
+            try:
+                resolved_resume_paths = _resolve_resume_paths(user.resume_path)
+            except FileNotFoundError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Uploaded profile document not found. Please re-upload your document: {str(e)}"
+                )
+            document_input = resolved_resume_paths if len(resolved_resume_paths) > 1 else resolved_resume_paths[0]
+            parser_res = await asyncio.wait_for(run_resume_parser(document_input), timeout=PIPELINE_TIMEOUT_SECONDS)
+            if parser_res.get("status") != "success" or not parser_res.get("output"):
+                raise HTTPException(status_code=400, detail=f"Resume parser failed upstream: {parser_res.get('error')}")
+            parsed_profile = parser_res["output"].get("parsed_profile")
+            user.parsed_profile_cache = parsed_profile
+            await _replace_agent_output(
+                db=db,
+                user_id=user.id,
+                agent_name="Resume Parser Agent",
+                agent_description="Extracts personal info, experience, skills, education, and all details from your resume using AI",
+                status="success",
+                output=parser_res.get("output"),
+                error_message=None,
+            )
+            await db.commit()
+
+        # 2. Resolve Brand Voice if missing
+        if not brand_voice:
+            brand_res = await asyncio.wait_for(run_brand_voice_agent(parsed_profile), timeout=PIPELINE_TIMEOUT_SECONDS)
+            if brand_res.get("status") != "success" or not brand_res.get("output"):
+                raise HTTPException(status_code=400, detail=f"Brand voice generator failed upstream: {brand_res.get('error')}")
+            brand_voice = brand_res["output"].get("brand_analysis")
+            user.brand_voice_cache = brand_voice
+            await _replace_agent_output(
+                db=db,
+                user_id=user.id,
+                agent_name="Brand Voice & Persona Agent",
+                agent_description="Generates your professional identity, brand voice, and personal summary based on your profile",
+                status="success",
+                output=brand_res.get("output"),
+                error_message=None,
+            )
+            await db.commit()
 
         result = await asyncio.wait_for(run_influencer_search(parsed_profile, brand_voice), timeout=PIPELINE_TIMEOUT_SECONDS)
         agent_output = await _replace_agent_output(
@@ -686,29 +755,7 @@ async def perform_gap_analysis(request: GapAnalysisRequest, db: AsyncSession = D
             detail="Please select at least one valid influencer from the list before running gap analysis."
         )
 
-    # Enforce that selected influencers must come from latest generated influencer list.
-    available_candidates = await _get_latest_influencer_candidates(db, request.user_id)
-    available_links = {
-        str(item.get("link") or "").strip().lower()
-        for item in available_candidates
-        if isinstance(item, dict)
-    }
-    selected_links = {
-        str(item.get("link") or "").strip().lower()
-        for item in valid_influencers
-    }
-
-    if not available_links:
-        raise HTTPException(
-            status_code=400,
-            detail="Run pipeline analysis first to generate influencer list, then select influencer(s) and continue."
-        )
-
-    if not selected_links.issubset(available_links):
-        raise HTTPException(
-            status_code=400,
-            detail="Selected influencer is not from the latest generated list. Please select from shown results and retry."
-        )
+    # Selected influencers are normalized and verified permissively to support custom and corrected selections.
 
     influencer_payload = (
         valid_influencers[0]
@@ -888,6 +935,20 @@ async def perform_gap_analysis_with_context(
     return await perform_gap_analysis(request_model, db)
 
 
+async def _delete_old_prompts_for_day(db: AsyncSession, user_id: int, target_day: str | None):
+    """Delete existing prompt outputs for the same user + target_day so only the latest is kept."""
+    existing = await db.execute(
+        select(AgentOutput).where(
+            AgentOutput.user_id == user_id,
+            AgentOutput.agent_name == "LinkedIn Prompt Generator",
+        )
+    )
+    for row in existing.scalars().all():
+        row_day = (row.output_data or {}).get("target_day")
+        if row_day == target_day:
+            await db.delete(row)
+
+
 @router.post("/pipeline/generate-posts", response_model=GapAnalysisResponse)
 async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncSession = Depends(get_db)):
     """Generate posts based on an approved gap analysis strategy (no email sent here)."""
@@ -927,7 +988,7 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         results = []
         
         # Run Post Generator
-        ar_posts = await run_post_generation(profile_data, brand_voice, request.gap_analysis_data, request.user_past_posts)
+        ar_posts = await run_post_generation(profile_data, brand_voice, request.gap_analysis_data, request.user_past_posts, target_day=request.target_day)
         
         post_agent_result = AgentResult(
             agent_name="LinkedIn Prompt Generator",
@@ -939,6 +1000,9 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
 
         if ar_posts["status"] != "success":
             raise HTTPException(status_code=500, detail=ar_posts.get("error") or "Prompt generation failed internally.")
+
+        # Delete old prompt for the same target_day (enforce one-per-day)
+        await _delete_old_prompts_for_day(db, user.id, request.target_day)
 
         db.add(AgentOutput(
             user_id=user.id,
@@ -990,6 +1054,105 @@ async def generate_posts_from_strategy(request: GeneratePostsRequest, db: AsyncS
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
 
 
+@router.post("/pipeline/generate-bulk-prompts", response_model=GapAnalysisResponse)
+async def generate_bulk_prompts(request: GeneratePostsRequest, db: AsyncSession = Depends(get_db)):
+    """Generate prompts in bulk for all suggested days in the gap analysis strategy."""
+    user_result = await db.execute(select(User).where(User.id == request.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    profile_data = user.parsed_profile_cache
+    brand_voice = user.brand_voice_cache
+
+    if not profile_data or not brand_voice:
+        raise HTTPException(
+            status_code=400, 
+            detail="User must run full pipeline analysis before generating posts"
+        )
+
+    # Get recommended days
+    strategy = request.gap_analysis_data.get("overall_content_strategy") or request.gap_analysis_data.get("content_strategy") or {}
+    days = strategy.get("recommended_days") or ["Monday", "Wednesday", "Friday"]
+    
+    if not days:
+        days = ["Monday", "Wednesday", "Friday"]
+
+    try:
+        results = []
+        all_prompts = []
+
+        for day in days:
+            # Run Post Generator for each day
+            ar_posts = await run_post_generation(
+                profile_data, 
+                brand_voice, 
+                request.gap_analysis_data, 
+                request.user_past_posts, 
+                target_day=day
+            )
+            
+            if ar_posts["status"] == "success":
+                # Delete old prompt for the same day (enforce one-per-day)
+                await _delete_old_prompts_for_day(db, user.id, day)
+
+                # Save to database
+                db.add(AgentOutput(
+                    user_id=user.id,
+                    agent_name="LinkedIn Prompt Generator",
+                    agent_description=f"Generates a strategic prompt for creating LinkedIn posts on {day}",
+                    status=ar_posts["status"],
+                    output_data=ar_posts.get("output"),
+                    error_message=ar_posts.get("error"),
+                ))
+                
+                results.append(AgentResult(
+                    agent_name="LinkedIn Prompt Generator",
+                    agent_description=f"Generates a strategic prompt for creating LinkedIn posts on {day}",
+                    status=ar_posts["status"],
+                    output=ar_posts["output"],
+                    error=ar_posts.get("error"),
+                ))
+                all_prompts.append(ar_posts.get("output"))
+            
+            # Brief delay between LLM calls to avoid rate limits
+            await asyncio.sleep(2)
+            
+        if not all_prompts:
+            raise HTTPException(status_code=500, detail="Failed to generate any prompts in bulk.")
+
+        # Batch email delivery
+        from agents.email_reminder_agent import run_email_reminder
+        batch_payload = {"generation_type": "batch_prompts", "prompts": all_prompts}
+        
+        print("[PIPELINE] Automatically dispatching bulk generated prompts to user email...")
+        ar_email = await run_email_reminder(user.email, batch_payload)
+        
+        if ar_email.get("status") == "success":
+            db.add(AgentOutput(
+                user_id=user.id,
+                agent_name="Email Delivery Agent",
+                agent_description="Automatically sends the batch generated prompts to the user's email",
+                status=ar_email["status"],
+                output_data=ar_email.get("output"),
+                error_message=ar_email.get("error"),
+            ))
+        
+        user.posting_schedule = days
+        user.cache_updated_at = datetime.utcnow()
+        await db.commit()
+
+        return GapAnalysisResponse(
+            message=f"Bulk prompt generation for {len(days)} days completed successfully",
+            results=results
+        )
+    except Exception as e:
+        import traceback
+        print(f"Bulk generation error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Bulk generation failed: {str(e)}")
+
+
 @router.post("/pipeline/send-reminder", response_model=GapAnalysisResponse)
 async def send_reminder_email(request: SendReminderRequest, db: AsyncSession = Depends(get_db)):
     """Send reminder email manually after user reviews generated posts."""
@@ -1004,6 +1167,9 @@ async def send_reminder_email(request: SendReminderRequest, db: AsyncSession = D
     if generation_type == "meta_prompt":
         if not posts_payload.get("post_generation_prompt"):
             raise HTTPException(status_code=400, detail="No generated prompt found to send")
+    elif generation_type == "batch_prompts":
+        if not posts_payload.get("prompts"):
+            raise HTTPException(status_code=400, detail="No batch prompts found to send")
     else:
         posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
         if not isinstance(posts, list) or not posts:
@@ -1068,6 +1234,9 @@ async def send_post_email(request: SendPostEmailRequest, db: AsyncSession = Depe
     if generation_type == "meta_prompt":
         if not posts_payload.get("post_generation_prompt"):
             raise HTTPException(status_code=400, detail="No generated prompt found to send")
+    elif generation_type == "batch_prompts":
+        if not posts_payload.get("prompts"):
+            raise HTTPException(status_code=400, detail="No batch prompts found to send")
     else:
         posts = posts_payload.get("posts") if isinstance(posts_payload, dict) else None
         if not isinstance(posts, list) or not posts:
@@ -1294,3 +1463,260 @@ async def get_saved_posts(user_id: int, db: AsyncSession = Depends(get_db)):
         ],
         "total": len(posts),
     }
+
+
+@router.post("/pipeline/reset-setup")
+async def reset_user_setup(request: PipelineRequest, db: AsyncSession = Depends(get_db)):
+    """Reset user setup data (caches and early agent outputs) but keep generated prompts and posts."""
+    user_result = await db.execute(select(User).where(User.id == request.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Clear user caches
+    user.resume_path = None
+    user.resume_filename = None
+    user.parsed_profile_cache = None
+    user.brand_voice_cache = None
+    user.influencer_scout_cache = None
+    user.selected_influencer_cache = None
+    user.posting_schedule = None
+    user.posting_time_utc = None
+    user.cache_updated_at = None
+    
+    # Delete setup-related AgentOutputs (keep prompts and emails)
+    keep_agents = [
+        "LinkedIn Prompt Generator",
+        "Email Delivery Agent",
+        "Email Reminder Agent",
+        "LinkedIn Prompt Delivery Agent"
+    ]
+    
+    outputs_result = await db.execute(select(AgentOutput).where(AgentOutput.user_id == user.id))
+    for output in outputs_result.scalars().all():
+        if output.agent_name not in keep_agents:
+            await db.delete(output)
+            
+    await db.commit()
+    
+    return {"message": "User setup data has been reset successfully."}
+
+
+@router.post("/pipeline/upload-resume")
+async def upload_resume(
+    user_id: int = Form(...),
+    documents: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload one or more resume/profile documents for an existing user."""
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    import uuid
+    import shutil
+    from path_resolver import to_portable_resume_path
+
+    routes_dir = os.path.dirname(__file__)
+    upload_dir = os.path.join(routes_dir, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    uploaded_docs = [doc for doc in documents if doc and doc.filename]
+    if not uploaded_docs:
+        raise HTTPException(status_code=400, detail="Please upload at least one PDF, DOC, or DOCX document")
+    if len(uploaded_docs) > 10:
+        raise HTTPException(status_code=400, detail="You can upload at most 10 documents")
+
+    portable_paths: list[str] = []
+    original_names: list[str] = []
+
+    for doc in uploaded_docs:
+        file_ext = os.path.splitext(doc.filename or "")[1].lower()
+        if file_ext not in [".pdf", ".doc", ".docx"]:
+            raise HTTPException(status_code=400, detail="Only PDF, DOC, and DOCX files are allowed")
+
+        safe_filename = f"{uuid.uuid4()}{file_ext}"
+        file_path = os.path.join(upload_dir, safe_filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(doc.file, buffer)
+
+        portable_paths.append(to_portable_resume_path(file_path))
+        original_names.append(str(doc.filename))
+
+    resume_path_payload = json.dumps(portable_paths) if len(portable_paths) > 1 else portable_paths[0]
+    resume_filename_payload = original_names[0] if len(original_names) == 1 else f"{original_names[0]} (+{len(original_names) - 1} more)"
+
+    user.resume_path = resume_path_payload
+    user.resume_filename = resume_filename_payload
+    user.parsed_profile_cache = None
+    user.brand_voice_cache = None
+    user.influencer_scout_cache = None
+    user.selected_influencer_cache = None
+    user.cache_updated_at = None
+
+    await db.commit()
+    await db.refresh(user)
+    write_user_state_markdown(user)
+
+    return {
+        "message": "Documents uploaded successfully",
+        "resume_path": user.resume_path,
+        "resume_filename": user.resume_filename,
+    }
+
+
+class UpdateBrandVoiceRequest(PydanticBaseModel):
+    user_id: int
+    brand_voice_data: dict
+
+@router.post("/pipeline/update-brand-voice")
+async def update_brand_voice(request: UpdateBrandVoiceRequest, db: AsyncSession = Depends(get_db)):
+    """Update user's brand voice cache manually."""
+    user_result = await db.execute(select(User).where(User.id == request.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.brand_voice_cache = request.brand_voice_data
+    user.cache_updated_at = datetime.utcnow()
+    
+    # Also update the latest AgentOutput for brand voice if it exists
+    latest_bv = await db.execute(
+        select(AgentOutput)
+        .where(
+            AgentOutput.user_id == user.id,
+            AgentOutput.agent_name == "Brand Voice & Persona Agent"
+        )
+        .order_by(AgentOutput.created_at.desc())
+        .limit(1)
+    )
+    bv_output = latest_bv.scalar_one_or_none()
+    if bv_output:
+        bv_output.output_data = {"brand_analysis": request.brand_voice_data}
+        
+    await db.commit()
+    return {"message": "Brand voice updated successfully."}
+
+
+class VerifyCustomInfluencerRequest(PydanticBaseModel):
+    url_or_name: str
+
+
+@router.post("/pipeline/verify-custom-influencer")
+async def verify_custom_influencer(request: VerifyCustomInfluencerRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Verify if a custom LinkedIn influencer URL or name exists on LinkedIn.
+    If it's a name or invalid URL, search Google (Serper) to locate the correct LinkedIn profile.
+    """
+    import re
+    from agents.influencer_agent import (
+        _normalize_linkedin_profile_url,
+        _verify_linkedin_profile_url,
+        search_google,
+        KNOWN_INFLUENCER_URLS,
+        KNOWN_SLUG_CORRECTIONS,
+    )
+
+    serper_key = os.getenv("SERPER_API_KEY")
+    query_or_url = request.url_or_name.strip()
+    if not query_or_url:
+        raise HTTPException(status_code=400, detail="URL or name cannot be empty")
+
+    candidate_url = ""
+    candidate_name = ""
+    candidate_headline = "LinkedIn Creator"
+
+    # Check if it looks like a URL
+    is_url = "linkedin.com" in query_or_url.lower() or query_or_url.startswith("http")
+
+    if is_url:
+        normalized = _normalize_linkedin_profile_url(query_or_url)
+        if normalized:
+            # First try direct verification
+            slug = normalized.split("/in/")[-1].split("/")[0].split("?")[0].replace("-", " ")
+            is_verified, source = _verify_linkedin_profile_url(normalized, "", serper_key)
+            if is_verified:
+                candidate_url = normalized
+                candidate_name = slug.title()
+                
+                # Fetch details from Google search if Serper is available
+                if serper_key:
+                    try:
+                        search_results = search_google(f'site:{normalized}', serper_key)
+                        if search_results:
+                            r = search_results[0]
+                            title_text = r.get("title", "")
+                            clean_title = title_text.split(" - ")[0].split(" | ")[0].strip()
+                            if clean_title:
+                                candidate_name = clean_title
+                            snippet = r.get("snippet", "")
+                            if snippet:
+                                candidate_headline = snippet[:120] + "..."
+                    except Exception:
+                        pass
+
+    # If direct verification failed or it's a name search
+    if not candidate_url and serper_key:
+        if is_url:
+            slug = query_or_url.split("/in/")[-1].split("/")[0].split("?")[0].replace("-", " ")
+            search_query = f'"{slug}" site:linkedin.com/in/'
+        else:
+            search_query = f'"{query_or_url}" site:linkedin.com/in/'
+
+        try:
+            results = search_google(search_query, serper_key)
+            if not results:
+                broader_query = f"{query_or_url} site:linkedin.com/in/"
+                results = search_google(broader_query, serper_key)
+
+            for r in results:
+                link = r.get("link", "")
+                normalized_link = _normalize_linkedin_profile_url(link)
+                if normalized_link and "/in/" in normalized_link.lower():
+                    is_verified, source = _verify_linkedin_profile_url(normalized_link, "", serper_key)
+                    if is_verified:
+                        candidate_url = normalized_link
+                        title_text = r.get("title", "")
+                        clean_title = title_text.split(" - ")[0].split(" | ")[0].strip()
+                        candidate_name = clean_title if clean_title else query_or_url.title()
+                        snippet = r.get("snippet", "")
+                        candidate_headline = snippet[:120] + "..." if snippet else "LinkedIn thought leader"
+                        break
+        except Exception as e:
+            print(f"Error during custom influencer Google search: {e}")
+
+    # Fallback if search failed but they provided a URL
+    if not candidate_url and is_url:
+        normalized = _normalize_linkedin_profile_url(query_or_url)
+        if normalized:
+            candidate_url = normalized
+            slug = normalized.split("/in/")[-1].split("/")[0].split("?")[0].replace("-", " ")
+            candidate_name = slug.title()
+
+    if not candidate_url:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not find or verify any LinkedIn profile for '{query_or_url}'. Please check spelling or URL format."
+        )
+
+    # Apply known corrections
+    name_key = candidate_name.lower()
+    if name_key in KNOWN_INFLUENCER_URLS:
+        candidate_url = KNOWN_INFLUENCER_URLS[name_key]
+    else:
+        slug_match = re.search(r"linkedin\.com/in/([\w-]+)", candidate_url.lower())
+        if slug_match:
+            slug = slug_match.group(1)
+            if slug in KNOWN_SLUG_CORRECTIONS:
+                candidate_url = KNOWN_SLUG_CORRECTIONS[slug]
+
+    return {
+        "title": candidate_name,
+        "headline": candidate_headline,
+        "link": candidate_url,
+        "snippet": f"Verified custom influencer added via search.",
+        "verified": True,
+        "verification_source": "verified_via_custom_lookup",
+    }
+

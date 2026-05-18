@@ -33,6 +33,8 @@ Rules:
 - STRICT PHRASING: You must describe what the USER lacks compared to the INFLUENCER. Do not critique the influencer. Always phrase it as "Compared to [Influencer Name], your profile lacks..." or "While the influencer has X, you currently have Y."
 - Identify specific content, authority, and engagement gaps of the USER.
 - DYNAMIC FREQUENCY: Calculate frequency (2-5 days/week) based on gap severity.
+- CRITICAL RULE: The number of items in "recommended_days" MUST EXACTLY MATCH the posting frequency. If you recommend 4 posts per week, you MUST list exactly 4 days. If you recommend 3, list exactly 3 days. If 5, list exactly 5 days. NEVER have a mismatch.
+- The "proposed_schedule" array must also have exactly one entry per recommended day.
 - Be concrete and evidence-oriented.
 
 JSON Structure:
@@ -53,22 +55,27 @@ JSON Structure:
         "score_explanation": "A short 1-2 sentence explanation of what these scores mean (e.g., 'A score of 100 means your profile perfectly matches the influencer. Lower scores indicate significant gaps you need to close.')"
     }},
     "content_strategy": {{
+        "posting_frequency": 3,
         "content_pillars": ["4 themes"],
         "recommended_post_types": ["Educational", "Thought Leadership", "Interactive"],
         "proposed_schedule": [
-           {{ "day": "Monday", "post_type": "...", "topic": "...", "goal": "..." }}
+           {{ "day": "Monday", "post_type": "...", "topic": "...", "goal": "..." }},
+           {{ "day": "Wednesday", "post_type": "...", "topic": "...", "goal": "..." }},
+           {{ "day": "Friday", "post_type": "...", "topic": "...", "goal": "..." }}
         ],
-        "recommended_days": ["Mon", "Wed", "Fri"],
+        "recommended_days": ["Monday", "Wednesday", "Friday"],
         "recommended_time_utc": "11:00",
         "day_selection_rationale": "...",
         "tone_adjustment": "..."
     }},
     "action_plan": ["Step 1", "Step 2", "Step 3"],
     "reminder_plan": {{
-        "reminder_days": ["Mon", "Wed", "Fri"],
+        "reminder_days": ["Monday", "Wednesday", "Friday"],
         "reminder_time_utc": "11:00"
     }}
 }}
+
+IMPORTANT: "posting_frequency" is a number (e.g. 3), and "recommended_days" must contain EXACTLY that many days. They must match perfectly.
 
 Return ONLY the JSON object. No intro, no markdown fences.
 """
@@ -135,6 +142,37 @@ async def run_gap_analysis(user_profile: dict, brand_voice: dict, influencer_dat
         analysis_results = parse_llm_json_content(content)
         if not isinstance(analysis_results, dict):
             raise json.JSONDecodeError("Gap analysis output was not a JSON object", str(analysis_results), 0)
+        
+        # Post-process: enforce recommended_days count matches posting_frequency
+        strategy = analysis_results.get("content_strategy", {})
+        if isinstance(strategy, dict):
+            freq = strategy.get("posting_frequency")
+            days = strategy.get("recommended_days", [])
+            all_weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+            
+            # Parse frequency to int
+            target_count = None
+            if isinstance(freq, int):
+                target_count = freq
+            elif isinstance(freq, str):
+                import re as _re
+                nums = _re.findall(r'\d+', str(freq))
+                if nums:
+                    target_count = int(nums[0])
+            
+            if target_count and isinstance(days, list) and len(days) != target_count:
+                # Adjust days to match frequency
+                if len(days) < target_count:
+                    # Add more days from weekdays not already in the list
+                    existing = set(d.strip().title() for d in days)
+                    for wd in all_weekdays:
+                        if wd not in existing and len(days) < target_count:
+                            days.append(wd)
+                elif len(days) > target_count:
+                    days = days[:target_count]
+                strategy["recommended_days"] = days
+                analysis_results["content_strategy"] = strategy
+                print(f"[GapAnalyzer] Adjusted recommended_days to {len(days)} to match posting_frequency={target_count}")
         
         return {
             "status": "success",

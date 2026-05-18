@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Cpu, FileText,
   LogOut, Mail, Play, Sparkles, Users, Target,
-  PenTool, Loader2, Bot, Zap, ExternalLink,
+  PenTool, Loader2, Bot, Zap, ExternalLink, Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -67,24 +67,6 @@ const PIPELINE_STEPS: PipelineStep[] = [
     glowColor: 'rgba(212,162,75,0.2)',
     description: 'Identifies content authority gaps',
   },
-  {
-    id: 'posts',
-    label: 'Prompt Generator',
-    shortLabel: 'Prompt',
-    icon: PenTool,
-    color: '#c9714f',
-    glowColor: 'rgba(201,113,79,0.18)',
-    description: 'Crafts your strategic LinkedIn prompt',
-  },
-  {
-    id: 'delivery',
-    label: 'Prompt Delivery',
-    shortLabel: 'Deliver',
-    icon: Mail,
-    color: '#7a9e87',
-    glowColor: 'rgba(122,158,135,0.18)',
-    description: 'Sends the prompt to your inbox',
-  },
 ];
 
 /* ─── Dot indicator ─── */
@@ -113,14 +95,12 @@ function StepDots({ current, statuses }: { current: number; statuses: StepStatus
 
 /* ─── Main Page ─── */
 export default function StudioPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
   /* pipeline state */
   const [loadingPipeline, setLoadingPipeline] = useState(false);
   const [runningGap, setRunningGap] = useState(false);
-  const [generatingPosts, setGeneratingPosts] = useState(false);
-  const [sendingPostEmail, setSendingPostEmail] = useState(false);
   const [liveStatus, setLiveStatus] = useState('');
   const [progress, setProgress] = useState(0);
 
@@ -130,12 +110,23 @@ export default function StudioPage() {
   const [selectedInfluencers, setSelectedInfluencers] = useState<any[]>([]);
   const [selectedInfluencerDrafts, setSelectedInfluencerDrafts] = useState<Record<string, InfluencerAnalysisDraft>>({});
   const [gapAnalysisData, setGapAnalysisData] = useState<any | null>(null);
-  const [postResults, setPostResults] = useState<any[]>([]);
+  const [customInfluencerUrl, setCustomInfluencerUrl] = useState('');
+  const [customInfluencerError, setCustomInfluencerError] = useState('');
   const [pastPostsInput, setPastPostsInput] = useState('');
+  const detectedPastPostsCount = useMemo(() => {
+    if (!pastPostsInput || !pastPostsInput.trim()) return 0;
+    return pastPostsInput.split(/\n\s*\n/).filter(p => p.trim() !== '').length;
+  }, [pastPostsInput]);
 
   /* UI */
   const [activeStepIdx, setActiveStepIdx] = useState(0);
   const [runningStepIdx, setRunningStepIdx] = useState(-1);
+
+  /* upload states */
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [addingCustomInfluencer, setAddingCustomInfluencer] = useState(false);
 
   useEffect(() => {
     if (!user) navigate('/login');
@@ -150,7 +141,6 @@ export default function StudioPage() {
         setResults(all);
         const infRes = all.find((r: any) => r.agent_name?.includes('Influence'));
         setInfluencers(infRes?.output?.influencers || []);
-        setPostResults(all.filter((r: any) => String(r.agent_name || '').includes('Prompt Generator')));
       } catch {
         setResults([]);
       }
@@ -248,11 +238,9 @@ export default function StudioPage() {
       if (idx === 1) return getLatestResult('Brand Voice') ? 'complete' : 'idle';
       if (idx === 2) return getLatestResult('Influence') ? 'complete' : 'idle';
       if (idx === 3) return gapAnalysisData ? 'complete' : 'idle';
-      if (idx === 4) return postResults.length > 0 ? 'complete' : 'idle';
-      if (idx === 5) return results.some(r => String(r.agent_name || '').includes('Prompt Delivery')) ? 'complete' : 'idle';
       return 'idle';
     });
-  }, [results, loadingPipeline, runningStepIdx, gapAnalysisData, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
+  }, [results, loadingPipeline, runningStepIdx, gapAnalysisData, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
 
   /* active result for display */
   const activeResult = useMemo(() => {
@@ -260,24 +248,8 @@ export default function StudioPage() {
     if (activeStepIdx === 1) return getLatestResult('Brand Voice');
     if (activeStepIdx === 2) return getLatestResult('Influence');
     if (activeStepIdx === 3) return results.find(r => String(r.agent_name || '').includes('Gap Analysis')) || null;
-    if (activeStepIdx === 4) return postResults[postResults.length - 1] || results.find(r => String(r.agent_name || '').includes('Prompt Generator')) || null;
-    if (activeStepIdx === 5) return results.find(r => String(r.agent_name || '').includes('Prompt Delivery')) || null;
     return null;
-  }, [activeStepIdx, results, postResults, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
-
-  const latestGeneratedPostOutput = useMemo(() => {
-    const r = [...postResults].reverse().find(r => String(r.agent_name || '').includes('Prompt Generator'));
-    return r?.output || null;
-  }, [postResults]);
-
-  const detectedPastPostsCount = useMemo(() => {
-    const raw = pastPostsInput.trim();
-    if (!raw) return 0;
-    const blocks = raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
-    if (blocks.length > 1) return blocks.length;
-    const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
-    return lines.length > 1 ? lines.length : 1;
-  }, [pastPostsInput]);
+  }, [activeStepIdx, results, cachedResumeResult, cachedBrandResult, cachedInfluencerResult]);
 
   const pipelineStage = useMemo(() => {
     if (!getLatestResult('Resume Parser')) return 'resume_parser';
@@ -300,7 +272,6 @@ export default function StudioPage() {
     setSelectedInfluencers([]);
     setSelectedInfluencerDrafts({});
     setGapAnalysisData(null);
-    setPostResults([]);
 
     if (stage === 'resume_parser') {
       setInfluencers([]);
@@ -358,7 +329,7 @@ export default function StudioPage() {
   };
 
   const runAgainForCurrentStep = async () => {
-    if (loadingPipeline || runningGap || generatingPosts || sendingPostEmail) return;
+    if (loadingPipeline || runningGap) return;
     if (!user) return;
 
     if (activeStepIdx === 0) {
@@ -375,14 +346,71 @@ export default function StudioPage() {
     }
     if (activeStepIdx === 3) {
       await runGapAnalysis();
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      setUploadFiles(prev => [...prev, ...droppedFiles].slice(0, 10));
+    }
+  };
+
+  const handleUploadResume = async () => {
+    if (!user) return;
+    if (uploadFiles.length === 0) {
+      toast.error('Please select at least one document to upload.');
       return;
     }
-    if (activeStepIdx === 4) {
-      await generatePosts();
-      return;
-    }
-    if (activeStepIdx === 5) {
-      await sendToEmail();
+
+    setUploadingResume(true);
+    const formData = new FormData();
+    formData.append('user_id', String(user.id));
+    uploadFiles.forEach(file => {
+      formData.append('documents', file);
+    });
+
+    try {
+      const res = await api.post('/pipeline/upload-resume', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success('Documents uploaded successfully!');
+
+      // Update Auth context user so local storage and state is updated immediately
+      updateUser({
+        resume_path: res.data.resume_path,
+        resume_filename: res.data.resume_filename,
+        parsed_profile_cache: null,
+        brand_voice_cache: null,
+        influencer_scout_cache: null,
+        selected_influencer_cache: null,
+      });
+
+      // Clear local upload state
+      setUploadFiles([]);
+
+      // Clear results in state so UI updates
+      setResults([]);
+
+      // We can also trigger the resume parser run stage automatically!
+      await runPipelineStage('resume_parser');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to upload documents.');
+    } finally {
+      setUploadingResume(false);
     }
   };
 
@@ -400,6 +428,44 @@ export default function StudioPage() {
         ? prev.filter(i => (i.link || i.title) !== key)
         : [...prev, inf];
     });
+  };
+
+  const handleAddCustomInfluencer = async () => {
+    const input = customInfluencerUrl.trim();
+    if (!input) return;
+
+    setAddingCustomInfluencer(true);
+    setCustomInfluencerError('');
+
+    try {
+      const res = await api.post('/pipeline/verify-custom-influencer', { url_or_name: input });
+      const verifiedInfluencer = res.data;
+
+      const alreadyExists = influencers.some(i => i.link === verifiedInfluencer.link);
+      if (!alreadyExists) {
+        setInfluencers(prev => [...prev, verifiedInfluencer]);
+      }
+
+      // Auto-toggle / select it
+      setSelectedInfluencers(prev => {
+        const isCurrentlySelected = prev.some(i => i.link === verifiedInfluencer.link);
+        if (isCurrentlySelected) return prev;
+        if (prev.length >= 3) {
+          toast.error('Influencer verified and added! (Could not auto-select: Max limit of 3 selected influencers reached.)');
+          return prev;
+        }
+        toast.success(`Successfully found & verified ${verifiedInfluencer.title} on LinkedIn!`);
+        return [...prev, verifiedInfluencer];
+      });
+
+      setCustomInfluencerUrl('');
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.detail || 'Could not verify or find this profile. Please make sure the URL exists or try searching by full name.';
+      setCustomInfluencerError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setAddingCustomInfluencer(false);
+    }
   };
 
   const getInfluencerKey = (inf: any) => String(inf.link || inf.title || inf.name || '');
@@ -466,62 +532,6 @@ export default function StudioPage() {
     } finally { setRunningGap(false); }
   };
 
-  const generatePosts = async (): Promise<boolean> => {
-    if (!user || !gapAnalysisData) { toast.error('Complete gap analysis first.'); return false; }
-    setGeneratingPosts(true);
-    try {
-      const raw = pastPostsInput.trim();
-      const blocks = raw
-        ? raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean)
-        : [];
-      const normalizedPosts = blocks.length > 1
-        ? blocks
-        : raw
-          ? raw.split('\n').map(s => s.trim()).filter(Boolean)
-          : [];
-      const limitedPosts = normalizedPosts.slice(0, 10);
-      if (normalizedPosts.length > 10) {
-        toast('Only the first 10 pasted posts will be used for tone/emotion extraction.');
-      }
-      const userPastPosts = limitedPosts.join('\n\n');
-
-      const res = await api.post('/pipeline/generate-posts', {
-        user_id: user.id,
-        gap_analysis_data: gapAnalysisData,
-        user_past_posts: userPastPosts,
-      });
-      const next = res.data.results || [];
-      setPostResults(next);
-      setResults(prev => [...prev, ...next]);
-      toast.success('Posts generated successfully.');
-      return true;
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Post generation failed.');
-      return false;
-    } finally { setGeneratingPosts(false); }
-  };
-
-  const sendToEmail = async (): Promise<boolean> => {
-    if (!user || !latestGeneratedPostOutput) { toast.error('Generate posts first.'); return false; }
-    setSendingPostEmail(true);
-    try {
-      const payload = { user_id: user.id, posts_data: latestGeneratedPostOutput };
-      let res: any;
-      try { res = await api.post('/pipeline/send-post-email', payload); }
-      catch (e: any) {
-        if (e?.response?.status === 404) res = await api.post('/pipeline/send-reminder', payload);
-        else throw e;
-      }
-      toast.success(res.data?.message || 'Posts sent to email.');
-      const refreshed = await api.get(`/pipeline/results/${user.id}`);
-      setResults(refreshed.data.results || []);
-      return true;
-    } catch (err: any) {
-      toast.error(String(err?.response?.data?.detail || err?.message || 'Failed to send email.'));
-      return false;
-    } finally { setSendingPostEmail(false); }
-  };
-
   const handleNextStep = async () => {
     if (activeStepIdx < 3 && pipelineStage !== 'done') {
       await runPipeline();
@@ -535,14 +545,7 @@ export default function StudioPage() {
     }
 
     if (activeStepIdx === 3) {
-      const completed = await generatePosts();
-      if (completed) setActiveStepIdx(4);
-      return;
-    }
-
-    if (activeStepIdx === 4) {
-      const completed = await sendToEmail();
-      if (completed) setActiveStepIdx(5);
+      navigate('/dashboard');
       return;
     }
 
@@ -554,30 +557,22 @@ export default function StudioPage() {
   const StepIcon = currentStep.icon;
   const nextStepLabel =
     pipelineStage === 'resume_parser'
-      ? (loadingPipeline ? 'Parsing…' : 'Run Resume Parser')
+      ? (loadingPipeline ? 'Parsing…' : (user?.resume_path ? 'Run Resume Parser' : 'Upload Resume'))
       : pipelineStage === 'brand_voice'
         ? (loadingPipeline ? 'Building…' : 'Run Brand Voice')
         : pipelineStage === 'influencer'
           ? (loadingPipeline ? 'Finding…' : 'Run Influencer Scout')
           : activeStepIdx === 2
             ? (runningGap ? 'Analyzing…' : 'Gap Analysis')
-            : activeStepIdx === 3
-              ? (generatingPosts ? 'Generating…' : 'Generate Prompt')
-              : activeStepIdx === 4
-                ? (sendingPostEmail ? 'Sending…' : 'Send Email')
-                : activeStepIdx < PIPELINE_STEPS.length - 1
-                  ? PIPELINE_STEPS[activeStepIdx + 1].shortLabel
-                  : 'Done';
+            : activeStepIdx < PIPELINE_STEPS.length - 1
+              ? PIPELINE_STEPS[activeStepIdx + 1].shortLabel
+              : 'Go to Dashboard';
   const nextButtonDisabled =
     pipelineStage !== 'done' && activeStepIdx < 3
-      ? loadingPipeline
+      ? (pipelineStage === 'resume_parser' && !user?.resume_path ? true : loadingPipeline)
       : activeStepIdx === 2
         ? runningGap || selectedInfluencers.length === 0
-        : activeStepIdx === 3
-          ? generatingPosts || !gapAnalysisData
-          : activeStepIdx === 4
-            ? sendingPostEmail || !latestGeneratedPostOutput
-            : activeStepIdx === PIPELINE_STEPS.length - 1;
+        : false;
 
   return (
     <div className="relative min-h-screen overflow-hidden text-[#1c1a17]" style={{ background: '#ede9e3ff' }}>
@@ -636,8 +631,8 @@ export default function StudioPage() {
             <button
               id="run-pipeline-btn"
               onClick={runPipeline}
-              disabled={loadingPipeline}
-              className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-bold py-3.5 transition-all duration-300 disabled:cursor-not-allowed"
+              disabled={loadingPipeline || (pipelineStage === 'resume_parser' && !user?.resume_path)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-bold py-3.5 transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50"
               style={{
                 background: loadingPipeline
                   ? 'rgba(201,113,79,0.14)'
@@ -647,7 +642,7 @@ export default function StudioPage() {
                 boxShadow: loadingPipeline
                   ? 'none'
                   : '0 4px 14px rgba(50,40,30,0.14)',
-                opacity: loadingPipeline ? 0.85 : 1,
+                opacity: (loadingPipeline || (pipelineStage === 'resume_parser' && !user?.resume_path)) ? 0.5 : 1,
                 letterSpacing: '0.03em',
               }}
             >
@@ -657,7 +652,7 @@ export default function StudioPage() {
               {loadingPipeline
                 ? 'Running stage…'
                 : pipelineStage === 'resume_parser'
-                  ? 'Run Resume Parser'
+                  ? (user?.resume_path ? 'Run Resume Parser' : 'Upload Resume')
                   : pipelineStage === 'brand_voice'
                     ? 'Run Brand Voice'
                     : pipelineStage === 'influencer'
@@ -723,7 +718,14 @@ export default function StudioPage() {
                     <button
                       key={step.id}
                       id={`pipeline-step-${step.id}`}
-                      onClick={() => setActiveStepIdx(idx)}
+                      onClick={() => {
+                        const previousStepsComplete = PIPELINE_STEPS.slice(0, idx).every((_, pIdx) => stepStatuses[pIdx] === 'complete');
+                        if (idx > 0 && !previousStepsComplete) {
+                          toast.error(`Please run and complete the previous steps first.`);
+                          return;
+                        }
+                        setActiveStepIdx(idx);
+                      }}
                       className="relative w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200"
                       style={{
                         background: isActive ? `${step.color}12` : 'transparent',
@@ -951,7 +953,7 @@ export default function StudioPage() {
                             data={activeResult}
                             index={activeStepIdx}
                             onRunAgain={runAgainForCurrentStep}
-                            isRunning={loadingPipeline || runningGap || generatingPosts || sendingPostEmail}
+                            isRunning={loadingPipeline || runningGap}
                           />
                         </div>
                       </div>
@@ -981,6 +983,128 @@ export default function StudioPage() {
                           <div className="font-bold text-[#1c1a17]/80 mb-1">{currentStep.label} is running</div>
                           <div className="text-sm" style={{ color: 'rgba(90,85,80,0.65)' }}>{liveStatus || 'Processing your data…'}</div>
                         </div>
+                      </div>
+                    ) : activeStepIdx === 0 && !user?.resume_path ? (
+                      /* Resume / profile documents upload zone */
+                      <div
+                        className="rounded-2xl flex flex-col p-8 gap-6"
+                        style={{
+                          background: 'rgba(255,255,255,0.8)',
+                          border: '1px solid rgba(201,113,79,0.25)',
+                          boxShadow: '0 8px 30px rgba(50,40,30,0.06)',
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center"
+                            style={{ background: 'rgba(201,113,79,0.1)', border: '1px solid rgba(201,113,79,0.25)' }}
+                          >
+                            <FileText size={18} style={{ color: '#c9714f' }} />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-[16px] text-[#1c1a17] leading-none mb-1">Upload Profile Documents</h3>
+                            <p className="text-[11px]" style={{ color: 'rgba(90,85,80,0.6)' }}>
+                              Add your resume or LinkedIn profile PDFs to build context.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          onDragEnter={handleDrag}
+                          onDragOver={handleDrag}
+                          onDragLeave={handleDrag}
+                          onDrop={handleDrop}
+                          onClick={() => document.getElementById('resume-upload-input')?.click()}
+                          className="relative rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-10 px-4 cursor-pointer transition-all duration-300"
+                          style={{
+                            borderColor: dragActive ? '#c9714f' : 'rgba(180,160,140,0.3)',
+                            background: dragActive ? 'rgba(201,113,79,0.04)' : 'rgba(180,160,140,0.03)',
+                          }}
+                        >
+                          <input
+                            type="file"
+                            id="resume-upload-input"
+                            multiple
+                            accept=".pdf,.doc,.docx"
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                const filesArray = Array.from(e.target.files);
+                                setUploadFiles(prev => [...prev, ...filesArray].slice(0, 10));
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <div
+                            className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
+                            style={{ background: 'rgba(201,113,79,0.08)' }}
+                          >
+                            <Upload size={20} style={{ color: '#c9714f' }} />
+                          </div>
+                          <span className="text-sm font-semibold text-[#1c1a17]/85 mb-1">
+                            {dragActive ? 'Drop files here' : 'Drag & drop your files here'}
+                          </span>
+                          <span className="text-[11px]" style={{ color: 'rgba(90,85,80,0.5)' }}>
+                            or click to browse from your device (PDF, DOC, DOCX up to 10 files)
+                          </span>
+                        </div>
+
+                        {uploadFiles.length > 0 && (
+                          <div className="flex flex-col gap-2 p-3.5 rounded-xl" style={{ background: 'rgba(122,158,135,0.06)', border: '1px solid rgba(122,158,135,0.2)' }}>
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-[#7a9e87] mb-1">
+                              Selected Documents
+                            </div>
+                            <div className="space-y-2">
+                              {uploadFiles.map((file, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between p-2 rounded-lg bg-white/60 border border-black/5"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <CheckCircle2 size={13} style={{ color: '#7a9e87' }} className="shrink-0" />
+                                    <span className="text-xs font-medium text-[#1c1a17]/85 truncate max-w-[280px]">
+                                      {file.name}
+                                    </span>
+                                    <span className="text-[9px]" style={{ color: 'rgba(90,85,80,0.45)' }}>
+                                      ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setUploadFiles(prev => prev.filter((_, i) => i !== idx));
+                                    }}
+                                    className="text-[10px] font-bold text-red-500 hover:text-red-700 transition-colors px-2 py-0.5 rounded hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleUploadResume}
+                          disabled={uploadingResume || uploadFiles.length === 0}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-300 disabled:opacity-50"
+                          style={{
+                            background: '#c9714f',
+                            color: '#fff',
+                            boxShadow: '0 4px 14px rgba(201,113,79,0.2)',
+                          }}
+                        >
+                          {uploadingResume ? (
+                            <>
+                              <Loader2 size={15} className="animate-spin" />
+                              Uploading & Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={14} />
+                              Initialize Setup with {uploadFiles.length} Document{uploadFiles.length !== 1 ? 's' : ''}
+                            </>
+                          )}
+                        </button>
                       </div>
                     ) : (
                       /* Empty / idle state */
@@ -1049,7 +1173,7 @@ export default function StudioPage() {
 
                   {influencers.length > 0 ? (
                     <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {influencers.map((inf, idx) => {
+                      {influencers.slice(0, 6).map((inf, idx) => {
                         const key = inf.link || inf.title;
                         const checked = selectedInfluencers.some(i => (i.link || i.title) === key);
                         return (
@@ -1116,6 +1240,55 @@ export default function StudioPage() {
                       Run the pipeline first to load influencers
                     </div>
                   )}
+
+                  {/* ── Custom LinkedIn URL input ── */}
+                  <div className="mt-4 rounded-xl p-4" style={{ background: 'rgba(201,113,79,0.06)', border: '1px solid rgba(201,113,79,0.2)' }}>
+                    <div className="font-semibold text-sm text-[#1c1a17]/85 mb-1 flex items-center gap-2">
+                      <ExternalLink size={14} style={{ color: '#c9714f' }} />
+                      Add Your Own LinkedIn Influencer
+                    </div>
+                    <p className="text-[11px] mb-3" style={{ color: 'rgba(90,85,80,0.65)' }}>
+                      Enter a LinkedIn profile URL or simply type their full name. The AI will search and verify that their profile exists on LinkedIn using Google.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        disabled={addingCustomInfluencer}
+                        value={customInfluencerUrl}
+                        onChange={e => { setCustomInfluencerUrl(e.target.value); setCustomInfluencerError(''); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !addingCustomInfluencer) {
+                            handleAddCustomInfluencer();
+                          }
+                        }}
+                        placeholder="e.g. Kristin Kehrer OR https://www.linkedin.com/in/kristen-kehrer-datamovesme/"
+                        className="flex-1 px-3 py-2 text-sm rounded-lg outline-none disabled:opacity-50"
+                        style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(201,113,79,0.3)', color: '#1c1a17' }}
+                      />
+                      <button
+                        onClick={handleAddCustomInfluencer}
+                        disabled={addingCustomInfluencer || !customInfluencerUrl.trim()}
+                        className="px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 disabled:cursor-not-allowed"
+                        style={{
+                          background: addingCustomInfluencer ? 'rgba(201,113,79,0.3)' : '#c9714f',
+                          color: '#fff',
+                          opacity: (addingCustomInfluencer || !customInfluencerUrl.trim()) ? 0.6 : 1,
+                        }}
+                      >
+                        {addingCustomInfluencer ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Verifying…
+                          </>
+                        ) : (
+                          'Add'
+                        )}
+                      </button>
+                    </div>
+                    {customInfluencerError && (
+                      <p className="text-xs mt-1.5" style={{ color: '#c9714f' }}>{customInfluencerError}</p>
+                    )}
+                  </div>
 
                   {selectedInfluencers.length > 0 ? (
                     <div className="mt-5 rounded-2xl p-4 md:p-5" style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(180,160,140,0.22)' }}>
@@ -1228,23 +1401,6 @@ export default function StudioPage() {
                   <div className="font-semibold text-[#1c1a17] mb-1">Gap Analysis Ready</div>
                   <div className="text-sm" style={{ color: 'rgba(90,85,80,0.7)' }}>
                     The uploaded influencer PDFs, pasted influencer samples, and your own posts were used to generate the gap analysis.
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ── Step 5 (idx=5): Send to email action ── */}
-              {activeStepIdx === 5 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl p-6"
-                  style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(244,63,94,0.2)' }}
-                >
-                  <div className="font-semibold text-[#1c1a17]/85 mb-1">Send Posts to Your Email</div>
-                  <div className="text-sm" style={{ color: 'rgba(90,85,80,0.7)' }}>
-                    {latestGeneratedPostOutput
-                      ? `Deliver generated posts to ${user?.email}. Use the bottom-right button to send them.`
-                      : 'Generate prompt first to unlock email delivery.'}
                   </div>
                 </motion.div>
               )}

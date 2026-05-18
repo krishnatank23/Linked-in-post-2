@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, Cpu, ExternalLink, Globe, UserCheck, BarChart3, Sparkles, Clock3, Mail } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Cpu, ExternalLink, Globe, UserCheck, BarChart3, Sparkles, Clock3, Mail, Calendar, Edit3, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { glassCard } from '../styles/classes';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 interface AgentCardProps {
   data: any;
@@ -80,7 +83,7 @@ function renderList(items: any[], fallback: string) {
   );
 }
 
-function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
+export function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth();
@@ -89,36 +92,39 @@ function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
   const firstDay = new Date(year, month, 1).getDay();
   
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const shortDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const shortDayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
   
-  const days = Array.from({ length: firstDay }, () => null).concat(
-    Array.from({ length: daysInMonth }, (_, i) => i + 1)
-  );
+  const days: (number | null)[] = [
+    ...Array.from({ length: firstDay }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  ];
   
   return (
-    <div className="p-5 rounded-2xl bg-black/5 border border-black/10">
-      <div className="flex items-center justify-between mb-4">
-        <div className="font-semibold text-[#1c1a17] text-lg">{monthNames[month]} {year}</div>
-        <div className="text-[10px] uppercase tracking-[0.15em] text-accent font-bold px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-full flex items-center gap-1.5">
-          <Clock3 size={12} />
-          Content Schedule
+    <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40 font-bold mb-1">Content Calendar</div>
+          <div className="font-bold text-[#1c1a17] text-xl tracking-tight">{monthNames[month]} {year}</div>
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-black/5 flex items-center justify-center text-black/40">
+          <Calendar size={20} />
         </div>
       </div>
       
-      <div className="grid grid-cols-7 gap-2 mb-2">
+      <div className="grid grid-cols-7 gap-1 mb-2">
         {shortDayNames.map((day) => (
-          <div key={day} className="text-center text-[11px] font-bold tracking-wider text-[#1c1a17]/40 py-1 uppercase">
+          <div key={day} className="text-center text-[10px] font-bold tracking-widest text-black/30 py-2 uppercase">
             {day}
           </div>
         ))}
       </div>
       
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1">
         {days.map((date, idx) => {
-          if (date === null) return <div key={`empty-${idx}`} className="p-2"></div>;
+          if (date === null) return <div key={`empty-${idx}`} className="h-10"></div>;
           
-          const currentDate = new Date(year, month, date as number);
+          const currentDate = new Date(year, month, date);
           const dayName = dayNames[currentDate.getDay()];
           const isScheduled = scheduledDays.includes(dayName);
           const isToday = date === today.getDate();
@@ -127,16 +133,33 @@ function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
             <div 
               key={date} 
               className={`
-                flex items-center justify-center h-10 w-full rounded-xl text-sm transition-all duration-300
-                ${isScheduled ? 'bg-accent text-white font-bold shadow-lg shadow-accent/25 scale-105 ring-2 ring-accent/20 ring-offset-1 ring-offset-transparent' : 'text-[#1c1a17]/70 hover:bg-black/10 hover:text-[#1c1a17]'}
-                ${isToday && !isScheduled ? 'border-2 border-accent/40 text-accent font-bold' : ''}
+                relative flex flex-col items-center justify-center h-10 w-full rounded-lg text-sm transition-all
+                ${isToday ? 'bg-[#c9714f] text-white font-bold shadow-md shadow-[#c9714f]/20' : 'text-black/60 hover:bg-black/5'}
               `}
-              title={isScheduled ? `Scheduled Post Day (${dayName})` : dayName}
             >
-              {date}
+              <span>{date}</span>
+              {isScheduled && !isToday && (
+                <div className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[#c9714f]/40" />
+              )}
             </div>
           );
         })}
+      </div>
+      
+      <div className="mt-6 pt-5 border-t border-black/[0.05] flex items-center justify-between text-[11px]">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 text-black/40">
+            <div className="w-2 h-2 rounded-full bg-[#c9714f]" />
+            <span className="font-medium">Today</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-black/40">
+            <div className="w-1.5 h-1.5 rounded-full bg-black/10" />
+            <span className="font-medium">Posting Day</span>
+          </div>
+        </div>
+        <div className="text-black/30 font-medium">
+          {scheduledDays.length} posts scheduled
+        </div>
       </div>
     </div>
   );
@@ -144,10 +167,98 @@ function ScheduleCalendar({ scheduledDays }: { scheduledDays: string[] }) {
 
 
 const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
+  const { user } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedFields, setEditedFields] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+
   const isSuccess = data.status === 'success';
   const agentName = String(data.agent_name || 'Agent');
   const output = data.output || {};
   const errorMessage = String(data.error || '').trim();
+
+  const setField = (path: string, value: string) => {
+    setEditedFields(prev => ({ ...prev, [path]: value }));
+  };
+
+  const getField = (path: string, fallback: any) => {
+    return path in editedFields ? editedFields[path] : fallback;
+  };
+
+  const handleSaveBrandVoice = async (brand: any) => {
+    try {
+      setSaving(true);
+      // Merge edited fields back into the brand object
+      const up = (obj: any, path: string) => editedFields[path] !== undefined ? editedFields[path] : obj;
+      const splitLines = (val: string) => val.split('\n').map(s => s.trim()).filter(Boolean);
+
+      const updated = {
+        ...brand,
+        user_persona: {
+          ...asObject(brand.user_persona),
+          professional_identity: up(asObject(brand.user_persona).professional_identity, 'persona.professional_identity'),
+          target_audience: up(asObject(brand.user_persona).target_audience, 'persona.target_audience'),
+          career_trajectory: up(asObject(brand.user_persona).career_trajectory, 'persona.career_trajectory'),
+          unique_value_proposition: up(asObject(brand.user_persona).unique_value_proposition, 'persona.unique_value_proposition'),
+          personality_traits: editedFields['persona.personality_traits'] !== undefined
+            ? splitLines(editedFields['persona.personality_traits'])
+            : asArray(asObject(brand.user_persona).personality_traits),
+          core_strengths: editedFields['persona.core_strengths'] !== undefined
+            ? splitLines(editedFields['persona.core_strengths'])
+            : asArray(asObject(brand.user_persona).core_strengths),
+          expertise_areas: editedFields['persona.expertise_areas'] !== undefined
+            ? splitLines(editedFields['persona.expertise_areas'])
+            : asArray(asObject(brand.user_persona).expertise_areas),
+        },
+        brand_voice: {
+          ...asObject(brand.brand_voice),
+          tone: up(asObject(brand.brand_voice).tone, 'voice.tone'),
+          style: up(asObject(brand.brand_voice).style, 'voice.style'),
+          vocabulary_level: up(asObject(brand.brand_voice).vocabulary_level, 'voice.vocabulary_level'),
+          communication_pillars: editedFields['voice.communication_pillars'] !== undefined
+            ? splitLines(editedFields['voice.communication_pillars'])
+            : asArray(asObject(brand.brand_voice).communication_pillars),
+          content_themes: editedFields['voice.content_themes'] !== undefined
+            ? splitLines(editedFields['voice.content_themes'])
+            : asArray(asObject(brand.brand_voice).content_themes),
+          sample_taglines: editedFields['voice.sample_taglines'] !== undefined
+            ? splitLines(editedFields['voice.sample_taglines'])
+            : asArray(asObject(brand.brand_voice).sample_taglines),
+          do_list: editedFields['voice.do_list'] !== undefined
+            ? splitLines(editedFields['voice.do_list'])
+            : asArray(asObject(brand.brand_voice).do_list),
+          dont_list: editedFields['voice.dont_list'] !== undefined
+            ? splitLines(editedFields['voice.dont_list'])
+            : asArray(asObject(brand.brand_voice).dont_list),
+        },
+        professional_summary: {
+          ...asObject(brand.professional_summary),
+          short_bio: up(asObject(brand.professional_summary).short_bio, 'summary.short_bio'),
+          elevator_pitch: up(asObject(brand.professional_summary).elevator_pitch, 'summary.elevator_pitch'),
+          linkedin_about: up(asObject(brand.professional_summary).linkedin_about, 'summary.linkedin_about'),
+          key_hashtags: editedFields['summary.key_hashtags'] !== undefined
+            ? splitLines(editedFields['summary.key_hashtags'])
+            : asArray(asObject(brand.professional_summary).key_hashtags),
+        },
+      };
+
+      await api.post('/pipeline/update-brand-voice', {
+        user_id: user?.id,
+        brand_voice_data: updated
+      });
+      toast.success('Brand voice updated successfully.');
+      setIsEditing(false);
+      setEditedFields({});
+
+      // Update output in-place so the card reflects changes immediately
+      if (output.brand_voice) output.brand_voice = updated;
+      if (output.brand_analysis) output.brand_analysis = updated;
+    } catch {
+      toast.error('Failed to save brand voice.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const renderContent = () => {
     if (agentName.includes('Resume')) {
@@ -243,8 +354,97 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
       const userPersona = asObject(brand.user_persona);
       const voice = asObject(brand.brand_voice);
       const summary = asObject(brand.professional_summary);
+
+      // Helper for editable textarea/input with same visual style as original
+      const EditField = ({ path, label, value, multiline = false, hint }: { path: string; label: string; value: any; multiline?: boolean; hint?: string }) => {
+        const rawVal = Array.isArray(value) ? value.join('\n') : (value || '');
+        const current = getField(path, rawVal);
+        const Tag = multiline ? 'textarea' : 'input';
+        return (
+          <div className="p-3 rounded-xl bg-white/60 border border-[#c9714f]/30">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-[#1c1a17]/40 font-bold mb-1.5">{label}</div>
+            {hint && <div className="text-[11px] text-[#1c1a17]/35 mb-1.5">{hint}</div>}
+            <Tag
+              className={`w-full text-sm text-[#1c1a17]/80 bg-transparent border-none outline-none resize-none leading-6 ${multiline ? 'min-h-[80px]' : ''}`}
+              value={current}
+              onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setField(path, e.target.value)}
+              rows={multiline ? 4 : undefined}
+            />
+          </div>
+        );
+      };
+
+      if (isEditing) {
+        return (
+          <div className="space-y-5">
+            {/* Edit mode header */}
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-[#1c1a17]">Edit Brand Voice</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setIsEditing(false); setEditedFields({}); }} disabled={saving}
+                  className="px-3 py-1.5 text-xs font-semibold text-[#1c1a17]/60 hover:text-[#1c1a17] bg-black/5 hover:bg-black/10 rounded-lg transition-colors flex items-center gap-1">
+                  <X size={14} /> Cancel
+                </button>
+                <button onClick={() => handleSaveBrandVoice(brand)} disabled={saving}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#c9714f] hover:bg-[#b05d3f] rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1">
+                  <Save size={14} /> {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+
+            {/* Professional Identity */}
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10 space-y-3">
+              <SectionHeader title="Professional Identity" subtitle="Who the model says this person is professionally." />
+              <EditField path="persona.professional_identity" label="Professional Identity" value={userPersona.professional_identity} multiline />
+            </div>
+
+            {/* Persona grid */}
+            <div className="grid md:grid-cols-2 gap-3">
+              <EditField path="persona.target_audience" label="Target Audience" value={userPersona.target_audience} multiline />
+              <EditField path="persona.career_trajectory" label="Career Trajectory" value={userPersona.career_trajectory} multiline />
+              <EditField path="persona.unique_value_proposition" label="Unique Value Proposition" value={userPersona.unique_value_proposition} multiline />
+              <EditField path="persona.personality_traits" label="Personality Traits" value={asArray(userPersona.personality_traits)} multiline hint="One per line" />
+              <EditField path="persona.core_strengths" label="Core Strengths" value={asArray(userPersona.core_strengths)} multiline hint="One per line" />
+              <EditField path="persona.expertise_areas" label="Expertise Areas" value={asArray(userPersona.expertise_areas)} multiline hint="One per line" />
+            </div>
+
+            {/* Brand Voice */}
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10 space-y-3">
+              <SectionHeader title="Brand Voice" subtitle="Writing tone, style, do's, don'ts, and communication pillars." />
+              <div className="grid md:grid-cols-2 gap-3">
+                <EditField path="voice.tone" label="Tone" value={voice.tone} />
+                <EditField path="voice.style" label="Style" value={voice.style} />
+                <EditField path="voice.vocabulary_level" label="Vocabulary Level" value={voice.vocabulary_level} />
+                <EditField path="voice.communication_pillars" label="Communication Pillars" value={asArray(voice.communication_pillars)} multiline hint="One per line" />
+                <EditField path="voice.content_themes" label="Content Themes" value={asArray(voice.content_themes)} multiline hint="One per line" />
+                <EditField path="voice.sample_taglines" label="Sample Taglines" value={asArray(voice.sample_taglines)} multiline hint="One per line" />
+                <EditField path="voice.do_list" label="Do List" value={asArray(voice.do_list)} multiline hint="One per line" />
+                <EditField path="voice.dont_list" label="Don't List" value={asArray(voice.dont_list)} multiline hint="One per line" />
+              </div>
+            </div>
+
+            {/* Professional Summary */}
+            <div className="p-4 rounded-2xl bg-black/5 border border-black/10 space-y-3">
+              <SectionHeader title="Professional Summary" subtitle="Useful copy for LinkedIn About and profile positioning." />
+              <EditField path="summary.short_bio" label="Short Bio" value={summary.short_bio} multiline />
+              <EditField path="summary.elevator_pitch" label="Elevator Pitch" value={summary.elevator_pitch} multiline />
+              <EditField path="summary.linkedin_about" label="LinkedIn About" value={summary.linkedin_about} multiline />
+              <EditField path="summary.key_hashtags" label="Key Hashtags" value={asArray(summary.key_hashtags)} multiline hint="One per line" />
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-5">
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-3 py-1.5 text-xs font-semibold text-[#1c1a17]/70 hover:text-white bg-black/5 hover:bg-black rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <Edit3 size={14} /> Edit Brand Voice
+            </button>
+          </div>
           <div className="p-4 rounded-2xl bg-black/5 border border-black/10">
             <SectionHeader title="Professional Identity" subtitle="Who the model says this person is professionally." />
             <p className="text-sm text-[#1c1a17]/75 leading-7">{fieldValue(userPersona.professional_identity)}</p>
@@ -306,7 +506,7 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
           <div className="p-4 rounded-2xl bg-accent/10 border border-accent/20 text-sm text-[#1c1a17]/75">
             Select one or more influencers in the workflow panel after this run completes.
           </div>
-          {influencers.slice(0, 3).map((inf: any, i: number) => (
+          {influencers.slice(0, 6).map((inf: any, i: number) => (
             <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-black/5 border border-black/10">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center text-accent">
@@ -466,15 +666,15 @@ const AgentCard = ({ data, index, onRunAgain, isRunning }: AgentCardProps) => {
       
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <StatCard label="Posting Frequency" value={output.posting_frequency || 'N/A'} icon={BarChart3} />
-            <StatCard label="Scheduled Days" value={scheduledDays.join(', ') || 'N/A'} icon={Clock3} />
-          </div>
-
           {/* Calendar Schedule */}
           {scheduledDays.length > 0 && (
             <ScheduleCalendar scheduledDays={scheduledDays} />
           )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <StatCard label="Posting Frequency" value={output.posting_frequency || 'N/A'} icon={BarChart3} />
+            <StatCard label="Scheduled Days" value={scheduledDays.join(', ') || 'N/A'} icon={Clock3} />
+          </div>
           
           {/* Main Prompt Section */}
           {prompt && (

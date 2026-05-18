@@ -33,7 +33,6 @@ const ALL_AGENT_SECTIONS = [
   { title: 'Influencer Analysis', agentMatch: 'Influence' },
   { title: 'Gap Analysis', agentMatch: 'Gap Analysis' },
   { title: 'Posting Recommendation', agentMatch: 'Posting Frequency Recommendation' },
-  { title: 'Prompt Generation', agentMatch: 'Prompt Generator' },
 ] as const;
 
 function normalizeStep(stepParam: string | undefined): WorkflowStep {
@@ -50,7 +49,6 @@ export default function WorkflowReviewPage() {
   const activeStep = normalizeStep(step);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -91,14 +89,6 @@ export default function WorkflowReviewPage() {
     return [...results].reverse().find((result) => String(result.agent_name || '').includes('Gap Analysis')) || null;
   }, [results]);
 
-  const postResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Generator')) || null;
-  }, [results]);
-
-  const deliveryResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Delivery')) || null;
-  }, [results]);
-
   const currentResult = orderedSteps[activeStep] || null;
   const isLastStep = activeStep >= STEP_CONFIG.length - 1;
 
@@ -114,49 +104,6 @@ export default function WorkflowReviewPage() {
   const goBack = () => {
     if (activeStep > 0) goToStep((activeStep - 1) as WorkflowStep);
     else navigate('/studio');
-  };
-
-  const sendGeneratedPosts = async () => {
-    if (!user || !postResult?.output) return;
-
-    try {
-      setSendingEmail(true);
-      const payload = {
-        user_id: user.id,
-        posts_data: postResult.output,
-      };
-
-      let response: any;
-      try {
-        response = await api.post('/pipeline/send-post-email', payload);
-      } catch (error: any) {
-        if (error?.response?.status === 404) {
-          response = await api.post('/pipeline/send-reminder', payload);
-        } else {
-          throw error;
-        }
-      }
-
-      const deliveryStatus = response?.data?.results?.[0]?.status;
-      const deliveryError = response?.data?.results?.[0]?.error || response?.data?.results?.[0]?.output?.message;
-      if (deliveryStatus && deliveryStatus !== 'success') {
-        throw new Error(deliveryError || 'Email delivery failed.');
-      }
-
-      toast.success(response.data?.message || `Sent to ${user.email || 'your registered email'}`);
-
-      const refreshResponse = await api.get(`/pipeline/results/${user.id}`);
-      setResults(refreshResponse.data.results || []);
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.detail ||
-        error?.response?.data?.results?.[0]?.error ||
-        error?.message ||
-        'Failed to send generated posts by email';
-      toast.error(String(errorMessage));
-    } finally {
-      setSendingEmail(false);
-    }
   };
 
   return (
@@ -285,44 +232,14 @@ export default function WorkflowReviewPage() {
                           Gap analysis is not available yet. Select influencer(s) and run gap analysis from Studio, then come back here.
                         </div>
                       )}
-                    </div>
-
-                    <div className={`${glassCard} p-5 md:p-6`}>
-                      <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-2">Post Generation</div>
-                      <p className="text-[#1c1a17]/55 text-sm leading-7 mb-4">
-                        This section shows the latest post-generation output if available.
-                      </p>
-                      {postResult ? (
-                        <div className="space-y-4">
-                          <AgentCard data={postResult} index={5} />
-
-                          <div className="rounded-2xl border border-black/10 bg-black/5 p-4 space-y-3">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.2em] text-[#1c1a17]/35 mb-1">Send To Email</div>
-                                <div className="text-sm text-[#1c1a17]/70 leading-6">
-                                  Email these generated posts to {user?.email || 'your registered Outlook inbox'}.
-                                </div>
-                              </div>
-                              <button onClick={sendGeneratedPosts} disabled={sendingEmail} className={`${btnPrimary} gap-2 whitespace-nowrap`}>
-                                {sendingEmail ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} Send this post to email
-                              </button>
-                            </div>
-
-                            {deliveryResult ? (
-                              <div className="rounded-2xl border border-accent/20 bg-accent/10 p-4 text-sm text-[#1c1a17]/75 flex items-start gap-3">
-                                <Mail size={18} className="mt-0.5 text-accent" />
-                                <div>
-                                  <div className="font-semibold text-[#1c1a17]/90 mb-1">Latest delivery status</div>
-                                  <div>{String(deliveryResult.output?.message || deliveryResult.error || 'Email delivery completed.')}</div>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl border border-dashed border-black/15 p-6 text-sm text-[#1c1a17]/55">
-                          No generated posts found yet. Run post generation in Studio after completing gap analysis.
+                      
+                      {gapResult && (
+                        <div className="mt-8 rounded-2xl border border-accent/30 bg-accent/10 p-6 text-center">
+                          <h4 className="text-xl font-bold font-heading mb-2 text-[#1c1a17]">Setup Complete!</h4>
+                          <p className="text-[#1c1a17]/70 text-sm mb-6">Your brand voice and gap analysis are complete. You are now ready to generate daily LinkedIn prompts.</p>
+                          <Link to="/dashboard" className={`${btnPrimary} inline-flex items-center gap-2`}>
+                            Go to Dashboard <ArrowRight size={16} />
+                          </Link>
                         </div>
                       )}
                     </div>

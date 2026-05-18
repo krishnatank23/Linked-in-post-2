@@ -218,19 +218,19 @@ async def run_resume_parser(file_path: str | list[str]) -> dict[str, Any]:
             }
 
         # Step 2: Build the LLM chain with optional fallback
-        ds_key = _get_deepseek_api_key()
+        # ds_key = _get_deepseek_api_key()
         groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(RESUME_PARSER_PROMPT)
         
         chains = []
-        if ds_key:
-            primary_llm = ChatOpenAI(
-                model=os.getenv("RESUME_PARSER_MODEL", "deepseek-v4-flash"),
-                temperature=0.1,
-                api_key=ds_key,
-                base_url="https://api.deepseek.com",
-            )
-            chains.append(prompt | primary_llm)
+        # if ds_key:
+        #     primary_llm = ChatOpenAI(
+        #         model=os.getenv("RESUME_PARSER_MODEL", "deepseek-v4-flash"),
+        #         temperature=0.1,
+        #         api_key=ds_key,
+        #         base_url="https://api.deepseek.com",
+        #     )
+        #     chains.append(prompt | primary_llm)
         
         if groq_key:
             fallback_llm = ChatGroq(

@@ -48,7 +48,7 @@ export default function LoginPage() {
         created_at: userResponse.data?.created_at,
       });
       toast.success(`Welcome back, ${username}`);
-      navigate('/studio');
+      navigate('/dashboard');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed. Please check your credentials.');
     } finally {

@@ -86,19 +86,19 @@ async def extract_niche_signature(profile_data: dict, brand_voice: dict) -> dict
     """Step 1: Use LLM to extract a structured niche signature."""
     try:
         # Step 1: Build the LLM chain with optional fallback
-        ds_key = _get_deepseek_api_key()
+        # ds_key = _get_deepseek_api_key()
         groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(SEARCH_QUERY_PROMPT)
         
         chains = []
-        if ds_key:
-            primary_llm = ChatOpenAI(
-                model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-                temperature=0.2,
-                api_key=ds_key,
-                base_url="https://api.deepseek.com",
-            )
-            chains.append(prompt | primary_llm)
+        # if ds_key:
+        #     primary_llm = ChatOpenAI(
+        #         model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+        #         temperature=0.1,
+        #         api_key=ds_key,
+        #         base_url="https://api.deepseek.com",
+        #     )
+        #     chains.append(prompt | primary_llm)
         
         if groq_key:
             fallback_llm = ChatGroq(
@@ -308,19 +308,19 @@ async def rank_influencers_with_llm(signature: dict, user_summary: str, raw_resu
         if direct_urls:
             results_text += f"\n\nDirect LinkedIn URLs found:\n" + "\n".join(direct_urls)
 
-        ds_key = _get_deepseek_api_key()
+        # ds_key = _get_deepseek_api_key()
         groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(RANK_INFLUENCERS_PROMPT)
         
         chains = []
-        if ds_key:
-            primary_llm = ChatOpenAI(
-                model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-                temperature=0.2,
-                api_key=ds_key,
-                base_url="https://api.deepseek.com",
-            )
-            chains.append(prompt | primary_llm)
+        # if ds_key:
+        #     primary_llm = ChatOpenAI(
+        #         model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+        #         temperature=0.2,
+        #         api_key=ds_key,
+        #         base_url="https://api.deepseek.com",
+        #     )
+        #     chains.append(prompt | primary_llm)
         
         if groq_key:
             fallback_llm = ChatGroq(

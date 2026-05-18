@@ -20,6 +20,7 @@ type AuthContextValue = {
   hydrated: boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => void;
+  updateUser: (updatedFields: Partial<AuthUser>) => void;
 };
 
 const TOKEN_KEY = 'postpilot_token';
@@ -75,6 +76,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+    },
+    updateUser: (updatedFields) => {
+      setUser((prev) => {
+        if (!prev) return null;
+        const next = { ...prev, ...updatedFields };
+        localStorage.setItem(USER_KEY, JSON.stringify(next));
+        return next;
+      });
     },
   }), [token, user, hydrated]);
 

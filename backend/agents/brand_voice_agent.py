@@ -45,18 +45,18 @@ Model output to repair:
 
 Return ONLY valid JSON matching the brand voice schema. No markdown, no explanation, no code fences."""
     )
-    ds_key = _get_deepseek_api_key()
+    # ds_key = _get_deepseek_api_key()
     groq_key = _get_groq_api_key()
     
     repair_models = []
-    if ds_key:
-        primary_repair_llm = ChatOpenAI(
-            model=os.getenv("REPAIR_MODEL", "deepseek-v4-flash"),
-            temperature=0.0,
-            api_key=ds_key,
-            base_url="https://api.deepseek.com",
-        )
-        repair_models.append(repair_prompt | primary_repair_llm)
+    # if ds_key:
+    #     primary_repair_llm = ChatOpenAI(
+    #         model=os.getenv("REPAIR_MODEL", "deepseek-v4-flash"),
+    #         temperature=0.0,
+    #         api_key=ds_key,
+    #         base_url="https://api.deepseek.com",
+    #     )
+    #     repair_models.append(repair_prompt | primary_repair_llm)
 
     if groq_key:
         fallback_repair_llm = ChatGroq(
@@ -205,19 +205,19 @@ async def run_brand_voice_agent(parsed_profile: dict) -> dict[str, Any]:
         print(f"[DEBUG] Brand Voice Agent: Industry context retrieved ({len(industry_context)} chars)")
 
         # Step 2: Build the LLM chain with optional fallback
-        ds_key = _get_deepseek_api_key()
+        # ds_key = _get_deepseek_api_key()
         groq_key = _get_groq_api_key()
         prompt = ChatPromptTemplate.from_template(BRAND_VOICE_PROMPT)
         
         chains = []
-        if ds_key:
-            primary_llm = ChatOpenAI(
-                model=os.getenv("BRAND_VOICE_MODEL", "deepseek-v4-flash"),
-                temperature=0.1,
-                api_key=ds_key,
-                base_url="https://api.deepseek.com",
-            )
-            chains.append(prompt | primary_llm)
+        # if ds_key:
+        #     primary_llm = ChatOpenAI(
+        #         model=os.getenv("BRAND_VOICE_MODEL", "deepseek-v4-flash"),
+        #         temperature=0.1,
+        #         api_key=ds_key,
+        #         base_url="https://api.deepseek.com",
+        #     )
+        #     chains.append(prompt | primary_llm)
         
         if groq_key:
             fallback_llm = ChatGroq(

@@ -227,19 +227,19 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
         else:
             previous_prompts_text = "No previous prompts (first generation)."
         
-        ds_key = _get_deepseek_api_key()
+        # ds_key = _get_deepseek_api_key()
         groq_key = _get_groq_api_key()
         
         models = []
-        if ds_key:
-            primary_llm = ChatOpenAI(
-                model=os.getenv("POST_GENERATOR_MODEL", "deepseek-v4-flash"),
-                temperature=0.9,
-                api_key=ds_key,
-                base_url="https://api.deepseek.com",
-                model_kwargs={"response_format": {"type": "json_object"}},
-            )
-            models.append(primary_llm)
+        # if ds_key:
+        #     primary_llm = ChatOpenAI(
+        #         model=os.getenv("POST_GENERATOR_MODEL", "deepseek-v4-flash"),
+        #         temperature=0.9,
+        #         api_key=ds_key,
+        #         base_url="https://api.deepseek.com",
+        #         model_kwargs={"response_format": {"type": "json_object"}},
+        #     )
+        #     models.append(primary_llm)
 
         if groq_key:
             fallback_llm = ChatGroq(
@@ -279,15 +279,15 @@ async def run_post_generation(user_profile: dict, brand_voice: dict, gap_analysi
                 extractor_prompt = ChatPromptTemplate.from_template(VOICE_EMOTION_EXTRACTION_PROMPT)
                 extractor_models = []
                 
-                if ds_key:
-                    primary_extractor_llm = ChatOpenAI(
-                        model=os.getenv("EXTRACTOR_MODEL", "deepseek-v4-flash"),
-                        temperature=0.2,
-                        api_key=ds_key,
-                        base_url="https://api.deepseek.com",
-                        model_kwargs={"response_format": {"type": "json_object"}},
-                    )
-                    extractor_models.append(extractor_prompt | primary_extractor_llm)
+                # if ds_key:
+                #     primary_extractor_llm = ChatOpenAI(
+                #         model=os.getenv("EXTRACTOR_MODEL", "deepseek-v4-flash"),
+                #         temperature=0.2,
+                #         api_key=ds_key,
+                #         base_url="https://api.deepseek.com",
+                #         model_kwargs={"response_format": {"type": "json_object"}},
+                #     )
+                #     extractor_models.append(extractor_prompt | primary_extractor_llm)
 
                 if groq_key:
                     fallback_extractor_llm = ChatGroq(

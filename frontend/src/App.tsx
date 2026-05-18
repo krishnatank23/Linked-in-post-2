@@ -9,6 +9,8 @@ import ResultsPage from './pages/ResultsPage';
 import SignupPage from './pages/SignupPage';
 import StudioPage from './pages/StudioPage';
 import WorkflowReviewPage from './pages/WorkflowReviewPage';
+import DashboardPage from './pages/DashboardPage';
+import DeliveryPage from './pages/DeliveryPage';
 
 function App() {
   return (
@@ -30,6 +32,14 @@ function App() {
                 }
               />
               <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/studio/review"
                 element={<Navigate to="/studio/review/0" replace />}
               />
@@ -46,6 +56,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ResultsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/delivery"
+                element={
+                  <ProtectedRoute>
+                    <DeliveryPage />
                   </ProtectedRoute>
                 }
               />

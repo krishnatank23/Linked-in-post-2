@@ -2,26 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowRight, 
-  CheckCircle2, 
-  Mail, 
   PenTool, 
   Play, 
   RefreshCw, 
   Sparkles, 
-  User,
-  ChevronRight, 
-  Globe, 
-  BarChart3, 
-  Clock3, 
-  UserCheck, 
-  Copy, 
-  Check,
   Send 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import AgentCard, { ScheduleCalendar } from '../components/AgentCard';
+import AgentCard from '../components/AgentCard';
 export default function DashboardPage() {
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -29,8 +19,6 @@ export default function DashboardPage() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPosts, setGeneratingPosts] = useState(false);
-  const [sendingPostEmail, setSendingPostEmail] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -66,17 +54,6 @@ export default function DashboardPage() {
   const latestPostResult = useMemo(() => {
     return postResults[postResults.length - 1] || null;
   }, [postResults]);
-
-  const deliveryResult = useMemo(() => {
-    return [...results].reverse().find((result) => String(result.agent_name || '').includes('Prompt Delivery')) || null;
-  }, [results]);
-
-  // Single source of truth for suggested posting days: gap analysis recommended_days
-  const suggestedDays: string[] = useMemo(() => {
-    if (!gapAnalysisData) return [];
-    const strategy = gapAnalysisData.overall_content_strategy || gapAnalysisData.content_strategy || {};
-    return strategy.recommended_days || [];
-  }, [gapAnalysisData]);
 
   const generatePosts = async (targetDay?: string) => {
     if (!user) return;
@@ -129,37 +106,6 @@ export default function DashboardPage() {
     }
   };
 
-
-  const sendToEmail = async () => {
-    if (!user || !latestPostResult?.output) return;
-
-    setSendingPostEmail(true);
-    try {
-      const payload = {
-        user_id: user.id,
-        posts_data: latestPostResult.output,
-      };
-
-      let response: any;
-      try {
-        response = await api.post('/pipeline/send-post-email', payload);
-      } catch (error: any) {
-        if (error?.response?.status === 404) {
-          response = await api.post('/pipeline/send-reminder', payload);
-        } else {
-          throw error;
-        }
-      }
-
-      toast.success(response.data?.message || `Sent to ${user.email}`);
-      const refreshed = await api.get(`/pipeline/results/${user.id}`);
-      setResults(refreshed.data.results || []);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send email.');
-    } finally {
-      setSendingPostEmail(false);
-    }
-  };
 
   const resetSetup = async () => {
     if (!user) return;
@@ -280,7 +226,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-bold flex items-center gap-2"><Sparkles size={18} className="text-[#c9714f]" /> Your Generated Prompt</h2>
                     <button
-                      onClick={generatePosts}
+                      onClick={() => generatePosts()}
                       disabled={generatingPosts}
                       className="px-4 py-2 text-sm font-semibold bg-black/5 hover:bg-black/10 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
                     >

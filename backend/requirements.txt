@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 sqlalchemy
-aiosqlite
+aioodbc
 aiohttp
 apscheduler
 python-multipart

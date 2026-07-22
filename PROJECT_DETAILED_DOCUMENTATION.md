@@ -43,7 +43,7 @@ This project addresses those gaps through an agentic pipeline and a guided UI wo
 
 ### 4.1 Backend
 - FastAPI
-- SQLAlchemy async + aiosqlite
+- SQLAlchemy async + aioodbc (Microsoft SQL Server)
 - LangGraph + LangChain + Groq
 - APScheduler
 - PyJWT + passlib

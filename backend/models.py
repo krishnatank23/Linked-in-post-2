@@ -6,7 +6,7 @@ from database import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "linkedin_users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     unique_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
@@ -34,10 +34,10 @@ class User(Base):
 
 
 class AgentOutput(Base):
-    __tablename__ = "agent_outputs"
+    __tablename__ = "linkedin_agent_outputs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("linkedin_users.id"), nullable=False)
     agent_name = Column(String(100), nullable=False)
     agent_description = Column(String(500), nullable=True)
     status = Column(String(20), default="pending")  # pending, running, success, error
@@ -54,7 +54,7 @@ class LinkedInPost(Base):
     __tablename__ = "linkedin_posts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("linkedin_users.id"), nullable=False)
     post_type = Column(String(100), nullable=False)  # e.g. Educational, Storytelling, etc.
     content = Column(Text, nullable=False)  # The actual post text
     goal = Column(Text, nullable=True)  # Purpose of the post (bridge gap, etc.)

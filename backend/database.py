@@ -1,14 +1,37 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import text
+from sqlalchemy.engine import URL
 import os
 from env_config import load_backend_env
 
 load_backend_env()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app.db")
+required_settings = ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME")
+missing_settings = [name for name in required_settings if not os.getenv(name)]
+if missing_settings:
+    raise RuntimeError(
+        "Missing required Microsoft SQL Server settings: " + ", ".join(missing_settings)
+    )
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+DATABASE_URL = URL.create(
+    "mssql+aioodbc",
+    username=os.environ["DB_USER"],
+    password=os.environ["DB_PASSWORD"],
+    host=os.environ["DB_HOST"],
+    port=int(os.getenv("DB_PORT", "1433")),
+    database=os.environ["DB_NAME"],
+    query={
+        "driver": os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server"),
+        "TrustServerCertificate": os.getenv("DB_TRUST_SERVER_CERTIFICATE", "no"),
+    },
+)
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -28,19 +51,3 @@ async def init_db():
     async with engine.begin() as conn:
         from models import Base as ModelBase  # noqa: F811
         await conn.run_sync(ModelBase.metadata.create_all)
-
-        # Lightweight SQLite migration for newly added user cache columns.
-        if DATABASE_URL.startswith("sqlite"):
-            result = await conn.execute(text("PRAGMA table_info(users)"))
-            columns = {row[1] for row in result.fetchall()}
-
-            if "parsed_profile_cache" not in columns:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN parsed_profile_cache JSON"))
-            if "brand_voice_cache" not in columns:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN brand_voice_cache JSON"))
-            if "influencer_scout_cache" not in columns:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN influencer_scout_cache JSON"))
-            if "selected_influencer_cache" not in columns:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN selected_influencer_cache JSON"))
-            if "cache_updated_at" not in columns:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN cache_updated_at DATETIME"))
